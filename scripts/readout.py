@@ -3,6 +3,7 @@
 
     python3 scripts/readout.py            all worlds in the decisions table
     python3 scripts/readout.py --jsonl F  read a saved export instead
+    python3 scripts/readout.py --probe F  print a saved probe:probeJev result
 
 For each decision and persona: how many decisions each backend made, the share
 of each act, and (in brackets) the mean probability behind it. The die's
@@ -38,10 +39,45 @@ def fold(decision, option):
     return option
 
 
+def print_probe(path):
+    """Jev's probabilities on the probe's constructed states (probe.ts)."""
+    with open(path) as f:
+        d = json.load(f)
+    print("probe: %s, every candidate at %s tiles, everyone a stranger\n" % (d["model"], d["distance"]))
+    names = [a["name"] for a in d["activity"]]
+    options = sorted(d["activity"][0]["probabilities"])
+    print("## activity: P(option)\n")
+    print("| persona | " + " | ".join(options) + " |")
+    print("|" + "---|" * (1 + len(options)))
+    for a in d["activity"]:
+        print("| %s | %s |" % (a["name"], " | ".join("%.2f" % a["probabilities"].get(o, 0) for o in options)))
+    print("\n## accept_invite: P(accept), row = invited, column = inviter\n")
+    print("| invited | " + " | ".join(names) + " | mean |")
+    print("|" + "---|" * (2 + len(names)))
+    for name in names:
+        cells, ps = [], []
+        for inviter in names:
+            hit = [x["accept"] for x in d["accept"] if x["name"] == name and x["inviter"] == inviter]
+            cells.append("%.2f" % hit[0] if hit else "-")
+            ps += hit
+        print("| %s | %s | %.2f |" % (name, " | ".join(cells), sum(ps) / len(ps)))
+    print("\n## invite_target: P(target), row = the one choosing\n")
+    cols = names + [NO_ONE]
+    print("| chooser | " + " | ".join(cols) + " |")
+    print("|" + "---|" * (1 + len(cols)))
+    for i in d["invite"]:
+        print("| %s | %s |" % (i["name"], " | ".join(
+            "-" if c == i["name"] else "%.2f" % i["probabilities"].get(c, 0) for c in cols)))
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--jsonl")
+    parser.add_argument("--probe")
     args = parser.parse_args()
+    if args.probe:
+        print_probe(args.probe)
+        return
     rows = load(args.jsonl)
 
     groups = defaultdict(lambda: {"n": 0, "fallbacks": 0, "taken": defaultdict(int),

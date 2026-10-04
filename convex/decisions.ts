@@ -204,6 +204,80 @@ async function decide(
   }
 }
 
+// --- the questions --------------------------------------------------------
+// What Jev is asked, kept apart from where it is asked so the probe
+// (probe.ts) puts the very same questions to constructed states.
+
+export type Me = { name: string; identity: string; goal: string | null };
+
+export const NO_ONE = 'no one';
+
+export function activityQuestion(me: Me, options: string[]) {
+  return {
+    state: { me },
+    instructions:
+      '`me` is free and alone for the next while, not talking to anyone. Which of these ' +
+      'does `me.name` choose to spend that time on, given who they are (`me.identity`) ' +
+      'and what they want (`me.goal`)?',
+    criteria: Object.fromEntries(options.map((o) => [o, `spend the time ${o}`])),
+  };
+}
+
+export function acceptQuestion(
+  me: Me,
+  inviter: { name: string; identity: string; lastEnded: number | null },
+  now: number,
+) {
+  return {
+    state: {
+      me,
+      inviter: {
+        name: inviter.name,
+        identity: inviter.identity,
+        last_talked_minutes_ago: minutesAgo(now, inviter.lastEnded),
+      },
+    },
+    instructions:
+      '`inviter.name` has just invited `me.name` to stop and talk. Does `me.name` accept, ' +
+      'given who they are (`me.identity`), what they want (`me.goal`) and who ' +
+      '`inviter` is (`inviter.identity`)?',
+    criteria: {
+      accept: 'agree, and walk over to talk',
+      decline: 'turn the invitation down and carry on alone',
+    },
+  };
+}
+
+export function inviteQuestion(
+  me: Me,
+  people: Array<{ label: string; identity: string; distance: number; lastEnded: number | null }>,
+  now: number,
+) {
+  const options = people.map((p) => p.label).concat([NO_ONE]);
+  return {
+    state: {
+      me,
+      free_people: people.map((p) => ({
+        name: p.label,
+        identity: p.identity,
+        distance_in_tiles: p.distance,
+        last_talked_minutes_ago: minutesAgo(now, p.lastEnded),
+      })),
+    },
+    instructions:
+      '`me` is walking around town and could start a conversation now. Whom does ' +
+      '`me.name` walk up to and start talking with: one of `free_people`, or no one? ' +
+      'Weigh who `me` is (`me.identity`), what they want (`me.goal`), who each person ' +
+      'is, how far away they are and how recently they last talked.',
+    criteria: Object.fromEntries(
+      options.map((o) => [
+        o,
+        o === NO_ONE ? 'start no conversation and keep walking' : `start a conversation with ${o}`,
+      ]),
+    ),
+  };
+}
+
 // --- the three decisions -------------------------------------------------
 
 export async function decideActivity(
@@ -227,14 +301,7 @@ export async function decideActivity(
       chosen: ACTIVITIES[Math.floor(Math.random() * ACTIVITIES.length)].description,
       probabilities: options.map((option) => ({ option, p: 1 / options.length })),
     }),
-    async () => ({
-      state: { me },
-      instructions:
-        '`me` is free and alone for the next while, not talking to anyone. Which of these ' +
-        'does `me.name` choose to spend that time on, given who they are (`me.identity`) ' +
-        'and what they want (`me.goal`)?',
-      criteria: Object.fromEntries(options.map((o) => [o, `spend the time ${o}`])),
-    }),
+    async () => activityQuestion(me, options),
   );
   return ACTIVITIES.find((a) => a.description === chosen)!;
 }
@@ -270,29 +337,10 @@ export async function decideAcceptInvite(
         { option: 'decline', p: 1 - INVITE_ACCEPT_PROBABILITY },
       ],
     }),
-    async () => ({
-      state: {
-        me,
-        inviter: {
-          name: inviter.name,
-          identity: inviter.identity,
-          last_talked_minutes_ago: minutesAgo(now, inviter.lastEnded),
-        },
-      },
-      instructions:
-        '`inviter.name` has just invited `me.name` to stop and talk. Does `me.name` accept, ' +
-        'given who they are (`me.identity`), what they want (`me.goal`) and who ' +
-        '`inviter` is (`inviter.identity`)?',
-      criteria: {
-        accept: 'agree, and walk over to talk',
-        decline: 'turn the invitation down and carry on alone',
-      },
-    }),
+    async () => acceptQuestion(me, inviter, now),
   );
   return chosen === 'accept';
 }
-
-export const NO_ONE = 'no one';
 
 // Returns the player to invite, or `declined: true` when the typed backend
 // chose no one -- which counts as an invite attempt, so the agent does not
@@ -348,30 +396,19 @@ export async function decideInviteTarget(
         probabilities: options.map((option) => ({ option, p: option === label ? 1 : 0 })),
       };
     },
-    async () => ({
-      state: {
+    async () =>
+      inviteQuestion(
         me,
-        free_people: labelled.map((c) => ({
-          name: c.label,
+        labelled.map((c) => ({
+          label: c.label,
           identity: c.identity,
-          distance_in_tiles: Math.round(
+          distance: Math.round(
             distance(player.position, otherFreePlayers.find((p) => p.id === c.playerId)!.position),
           ),
-          last_talked_minutes_ago: minutesAgo(now, c.lastEnded),
+          lastEnded: c.lastEnded,
         })),
-      },
-      instructions:
-        '`me` is walking around town and could start a conversation now. Whom does ' +
-        '`me.name` walk up to and start talking with: one of `free_people`, or no one? ' +
-        'Weigh who `me` is (`me.identity`), what they want (`me.goal`), who each person ' +
-        'is, how far away they are and how recently they last talked.',
-      criteria: Object.fromEntries(
-        options.map((o) => [
-          o,
-          o === NO_ONE ? 'start no conversation and keep walking' : `start a conversation with ${o}`,
-        ]),
+        now,
       ),
-    }),
   );
   if (chosen === NO_ONE) {
     return { declined: true };
