@@ -1,0 +1,200 @@
+{
+  "accept": [
+    {
+      "accept": 0.95,
+      "inviter": "Bob",
+      "name": "Lucky"
+    },
+    {
+      "accept": 0.81,
+      "inviter": "Stella",
+      "name": "Lucky"
+    },
+    {
+      "accept": 0.99,
+      "inviter": "Alice",
+      "name": "Lucky"
+    },
+    {
+      "accept": 0.89,
+      "inviter": "Pete",
+      "name": "Lucky"
+    },
+    {
+      "accept": 0,
+      "inviter": "Lucky",
+      "name": "Bob"
+    },
+    {
+      "accept": 0,
+      "inviter": "Stella",
+      "name": "Bob"
+    },
+    {
+      "accept": 0.01,
+      "inviter": "Alice",
+      "name": "Bob"
+    },
+    {
+      "accept": 0,
+      "inviter": "Pete",
+      "name": "Bob"
+    },
+    {
+      "accept": 0.94,
+      "inviter": "Lucky",
+      "name": "Stella"
+    },
+    {
+      "accept": 0.83,
+      "inviter": "Bob",
+      "name": "Stella"
+    },
+    {
+      "accept": 0.94,
+      "inviter": "Alice",
+      "name": "Stella"
+    },
+    {
+      "accept": 0.89,
+      "inviter": "Pete",
+      "name": "Stella"
+    },
+    {
+      "accept": 0.82,
+      "inviter": "Lucky",
+      "name": "Alice"
+    },
+    {
+      "accept": 0.62,
+      "inviter": "Bob",
+      "name": "Alice"
+    },
+    {
+      "accept": 0.41,
+      "inviter": "Stella",
+      "name": "Alice"
+    },
+    {
+      "accept": 0.48,
+      "inviter": "Pete",
+      "name": "Alice"
+    },
+    {
+      "accept": 0.92,
+      "inviter": "Lucky",
+      "name": "Pete"
+    },
+    {
+      "accept": 0.96,
+      "inviter": "Bob",
+      "name": "Pete"
+    },
+    {
+      "accept": 0.42,
+      "inviter": "Stella",
+      "name": "Pete"
+    },
+    {
+      "accept": 0.94,
+      "inviter": "Alice",
+      "name": "Pete"
+    }
+  ],
+  "activity": [
+    {
+      "name": "Lucky",
+      "probabilities": {
+        "daydreaming": 0.03,
+        "gardening": 0,
+        "reading a book": 0.97
+      }
+    },
+    {
+      "name": "Bob",
+      "probabilities": {
+        "daydreaming": 0,
+        "gardening": 1,
+        "reading a book": 0
+      }
+    },
+    {
+      "name": "Stella",
+      "probabilities": {
+        "daydreaming": 0.95,
+        "gardening": 0,
+        "reading a book": 0.05
+      }
+    },
+    {
+      "name": "Alice",
+      "probabilities": {
+        "daydreaming": 0.43,
+        "gardening": 0,
+        "reading a book": 0.57
+      }
+    },
+    {
+      "name": "Pete",
+      "probabilities": {
+        "daydreaming": 0.02,
+        "gardening": 0,
+        "reading a book": 0.98
+      }
+    }
+  ],
+  "distance": 5,
+  "invite": [
+    {
+      "name": "Lucky",
+      "probabilities": {
+        "Alice": 0.25,
+        "Bob": 0.01,
+        "Pete": 0.05,
+        "Stella": 0.63,
+        "no one": 0.06
+      }
+    },
+    {
+      "name": "Bob",
+      "probabilities": {
+        "Alice": 0,
+        "Lucky": 0,
+        "Pete": 0,
+        "Stella": 0,
+        "no one": 1
+      }
+    },
+    {
+      "name": "Stella",
+      "probabilities": {
+        "Alice": 0.18,
+        "Bob": 0.04,
+        "Lucky": 0.56,
+        "Pete": 0.17,
+        "no one": 0.05
+      }
+    },
+    {
+      "name": "Alice",
+      "probabilities": {
+        "Bob": 0,
+        "Lucky": 0.89,
+        "Pete": 0.01,
+        "Stella": 0,
+        "no one": 0.1
+      }
+    },
+    {
+      "name": "Pete",
+      "probabilities": {
+        "Alice": 0.11,
+        "Bob": 0.04,
+        "Lucky": 0.75,
+        "Stella": 0.04,
+        "no one": 0.06
+      }
+    }
+  ],
+  "model": "jev-1.13.0"
+}
