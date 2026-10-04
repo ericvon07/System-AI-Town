@@ -39,6 +39,9 @@ export const agentInputs = {
       agentId: v.id('agents'),
       destination: v.optional(point),
       invitee: v.optional(v.id('players')),
+      // The jev backend chose to invite no one: an attempt all the same, so
+      // the agent waits the cooldown before it asks again.
+      declinedInvite: v.optional(v.boolean()),
       activity: v.optional(activity),
     },
     handler: (game, now, args) => {
@@ -65,11 +68,58 @@ export const agentInputs = {
         Conversation.start(game, now, player, invitee);
         agent.lastInviteAttempt = now;
       }
+      if (args.declinedInvite) {
+        agent.lastInviteAttempt = now;
+      }
       if (args.destination) {
         movePlayer(game, now, player, args.destination);
       }
       if (args.activity) {
         player.activity = args.activity;
+      }
+      return null;
+    },
+  }),
+  finishDecideInvite: inputHandler({
+    args: {
+      operationId: v.string(),
+      agentId,
+      conversationId,
+      accept: v.boolean(),
+    },
+    handler: (game, now, args) => {
+      const agentId = parseGameId('agents', args.agentId);
+      const agent = game.world.agents.get(agentId);
+      if (!agent) {
+        throw new Error(`Couldn't find agent: ${agentId}`);
+      }
+      if (
+        !agent.inProgressOperation ||
+        agent.inProgressOperation.operationId !== args.operationId
+      ) {
+        console.debug(`Agent ${agentId} wasn't deciding an invite ${args.operationId}`);
+        return null;
+      }
+      delete agent.inProgressOperation;
+      const player = game.world.players.get(agent.playerId);
+      const conversation = game.world.conversations.get(
+        parseGameId('conversations', args.conversationId),
+      );
+      // The inviter may have given up while the answer was on its way.
+      const member = player && conversation?.participants.get(player.id);
+      if (!player || !conversation || !member || member.status.kind !== 'invited') {
+        return null;
+      }
+      if (args.accept) {
+        console.log(`Agent ${player.id} accepting invite (jev)`);
+        conversation.acceptInvite(game, player);
+        // Stop moving so we can start walking towards the other player.
+        if (player.pathfinding) {
+          delete player.pathfinding;
+        }
+      } else {
+        console.log(`Agent ${player.id} rejecting invite (jev)`);
+        conversation.rejectInvite(game, now, player);
       }
       return null;
     },

@@ -10,10 +10,11 @@ import {
 } from '../agent/conversation';
 import { assertNever } from '../util/assertNever';
 import { serializedAgent } from './agent';
-import { ACTIVITIES, ACTIVITY_COOLDOWN, CONVERSATION_COOLDOWN } from '../constants';
+import { ACTIVITY_COOLDOWN, CONVERSATION_COOLDOWN } from '../constants';
 import { api, internal } from '../_generated/api';
 import { sleep } from '../util/sleep';
 import { serializedPlayer } from './player';
+import { decideAcceptInvite, decideActivity, decideInviteTarget } from '../decisions';
 
 export const agentRememberConversation = internalAction({
   args: {
@@ -126,7 +127,8 @@ export const agentDoSomething = internalAction({
         return;
       } else {
         // TODO: have LLM choose the activity & emoji
-        const activity = ACTIVITIES[Math.floor(Math.random() * ACTIVITIES.length)];
+        // The die, or Jev, behind the decision seam (decisions.ts).
+        const activity = await decideActivity(ctx, args.worldId, player.id, now);
         await sleep(Math.random() * 1000);
         await ctx.runMutation(api.aiTown.main.sendInput, {
           worldId: args.worldId,
@@ -144,15 +146,11 @@ export const agentDoSomething = internalAction({
         return;
       }
     }
-    const invitee =
+    // The die, or Jev, behind the decision seam (decisions.ts).
+    const { invitee, declined } =
       justLeftConversation || recentlyAttemptedInvite
-        ? undefined
-        : await ctx.runQuery(internal.aiTown.agent.findConversationCandidate, {
-            now,
-            worldId: args.worldId,
-            player: args.player,
-            otherFreePlayers: args.otherFreePlayers,
-          });
+        ? { invitee: undefined, declined: undefined }
+        : await decideInviteTarget(ctx, args.worldId, now, args.player, args.otherFreePlayers);
 
     // TODO: We hit a lot of OCC errors on sending inputs in this file. It's
     // easy for them to get scheduled at the same time and line up in time.
@@ -164,6 +162,40 @@ export const agentDoSomething = internalAction({
         operationId: args.operationId,
         agentId: args.agent.id,
         invitee,
+        declinedInvite: declined,
+      },
+    });
+  },
+});
+
+// The jev backend's answer to an invitation from another agent. Upstream
+// decides inside the engine's tick with a die; a typed decision needs a
+// network call, so it runs here as an operation and comes back as an input.
+export const agentDecideInvite = internalAction({
+  args: {
+    worldId: v.id('worlds'),
+    playerId,
+    agentId,
+    conversationId,
+    otherPlayerId: playerId,
+    operationId: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const accept = await decideAcceptInvite(
+      ctx,
+      args.worldId,
+      args.playerId,
+      args.otherPlayerId,
+      Date.now(),
+    );
+    await ctx.runMutation(api.aiTown.main.sendInput, {
+      worldId: args.worldId,
+      name: 'finishDecideInvite',
+      args: {
+        operationId: args.operationId,
+        agentId: args.agentId,
+        conversationId: args.conversationId,
+        accept,
       },
     });
   },

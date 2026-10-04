@@ -14,11 +14,13 @@ import { kickEngine, startEngine, stopEngine } from './aiTown/main';
 import { insertInput } from './aiTown/insertInput';
 import { fetchEmbedding } from './util/llm';
 import { chatCompletion } from './util/llm';
+import { askJev, choice } from './util/jev';
 import { startConversationMessage } from './agent/conversation';
 import { GameId } from './aiTown/ids';
 
-// Clear all of the tables except for the embeddings cache.
-const excludedTables: Array<TableNames> = ['embeddingsCache'];
+// Clear all of the tables except for the embeddings cache and the decision
+// trace, which outlives a world so two backends can be read side by side.
+const excludedTables: Array<TableNames> = ['embeddingsCache', 'decisions'];
 
 export const wipeAllTables = internalMutation({
   handler: async (ctx) => {
@@ -184,6 +186,30 @@ export const testCompletion = internalAction({
         { content: 'Where is pizza?', role: 'user' },
       ],
     });
+  },
+});
+
+// One typed question to Jev, to check the key and the wire before a run.
+export const testJev = internalAction({
+  args: {},
+  handler: async () => {
+    return await askJev(
+      {
+        me: {
+          name: 'Bob',
+          identity:
+            'Bob is always grumpy and he loves trees. He spends most of his time gardening by himself.',
+          goal: 'You want to avoid people as much as possible.',
+        },
+      },
+      {
+        activity: choice('Which of these does `me.name` choose to do now?', {
+          'reading a book': null,
+          daydreaming: null,
+          gardening: null,
+        }),
+      },
+    );
   },
 });
 

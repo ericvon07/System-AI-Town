@@ -22,6 +22,7 @@ import { distance } from '../util/geometry';
 import { internal } from '../_generated/api';
 import { movePlayer } from './movement';
 import { insertInput } from './insertInput';
+import { decisionBackend } from '../decisions';
 
 export class Agent {
   id: GameId<'agents'>;
@@ -109,9 +110,24 @@ export class Agent {
       )!;
       const otherPlayer = game.world.players.get(otherPlayerId)!;
       if (member.status.kind === 'invited') {
+        // The jev backend answers an agent's invitation in an operation
+        // (decisions.ts); a human's is still accepted unconditionally.
+        if (!otherPlayer.human && decisionBackend() === 'jev') {
+          this.startOperation(game, now, 'agentDecideInvite', {
+            worldId: game.worldId,
+            playerId: player.id,
+            agentId: this.id,
+            conversationId: conversation.id,
+            otherPlayerId: otherPlayer.id,
+          });
+          return;
+        }
         // Accept a conversation with another agent with some probability and with
         // a human unconditionally.
         if (otherPlayer.human || Math.random() < INVITE_ACCEPT_PROBABILITY) {
+          if (!otherPlayer.human) {
+            recordDiceInvite(game, player.id, otherPlayer.id, 'accept');
+          }
           console.log(`Agent ${player.id} accepting invite from ${otherPlayer.id}`);
           conversation.acceptInvite(game, player);
           // Stop moving so we can start walking towards the other player.
@@ -119,6 +135,7 @@ export class Agent {
             delete player.pathfinding;
           }
         } else {
+          recordDiceInvite(game, player.id, otherPlayer.id, 'decline');
           console.log(`Agent ${player.id} rejecting invite from ${otherPlayer.id}`);
           conversation.rejectInvite(game, now, player);
         }
@@ -268,6 +285,30 @@ export class Agent {
   }
 }
 
+// The die's answer to an invitation is drawn inside the tick, where nothing
+// can be written; the trace row goes out with the step's operations instead.
+function recordDiceInvite(
+  game: Game,
+  playerId: GameId<'players'>,
+  otherPlayerId: GameId<'players'>,
+  chosen: 'accept' | 'decline',
+) {
+  game.scheduleOperation('recordDecision', {
+    worldId: game.worldId,
+    backend: 'dice',
+    decision: 'accept_invite',
+    playerId,
+    name: game.playerDescriptions.get(playerId)?.name ?? playerId,
+    otherName: game.playerDescriptions.get(otherPlayerId)?.name ?? otherPlayerId,
+    options: ['accept', 'decline'],
+    chosen,
+    probabilities: [
+      { option: 'accept', p: INVITE_ACCEPT_PROBABILITY },
+      { option: 'decline', p: 1 - INVITE_ACCEPT_PROBABILITY },
+    ],
+  });
+}
+
 export const serializedAgent = {
   id: agentId,
   playerId: playerId,
@@ -297,6 +338,12 @@ export async function runAgentOperation(ctx: MutationCtx, operation: string, arg
       break;
     case 'agentDoSomething':
       reference = internal.aiTown.agentOperations.agentDoSomething;
+      break;
+    case 'agentDecideInvite':
+      reference = internal.aiTown.agentOperations.agentDecideInvite;
+      break;
+    case 'recordDecision':
+      reference = internal.decisions.record;
       break;
     default:
       throw new Error(`Unknown operation: ${operation}`);
