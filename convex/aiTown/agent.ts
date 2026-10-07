@@ -12,6 +12,8 @@ import {
   INVITE_TIMEOUT,
   MAX_CONVERSATION_DURATION,
   MAX_CONVERSATION_MESSAGES,
+  JUDGED_MAX_CONVERSATION_DURATION,
+  JUDGED_MAX_CONVERSATION_MESSAGES,
   MESSAGE_COOLDOWN,
   MIDPOINT_THRESHOLD,
   PLAYER_CONVERSATION_COOLDOWN,
@@ -112,7 +114,7 @@ export class Agent {
       if (member.status.kind === 'invited') {
         // The jev backend answers an agent's invitation in an operation
         // (decisions.ts); a human's is still accepted unconditionally.
-        if (!otherPlayer.human && decisionBackend() === 'jev') {
+        if (!otherPlayer.human && decisionBackend() !== 'dice') {
           this.startOperation(game, now, 'agentDecideInvite', {
             worldId: game.worldId,
             playerId: player.id,
@@ -206,8 +208,13 @@ export class Agent {
           }
         }
         // See if the conversation has been going on too long and decide to leave.
-        const tooLongDeadline = started + MAX_CONVERSATION_DURATION;
-        if (tooLongDeadline < now || conversation.numMessages > MAX_CONVERSATION_MESSAGES) {
+        // Under the judged backends the agent is asked before each reply
+        // (agentGenerateMessage), and this is only the cap above that.
+        const judged = decisionBackend() !== 'dice';
+        const maxDuration = judged ? JUDGED_MAX_CONVERSATION_DURATION : MAX_CONVERSATION_DURATION;
+        const maxMessages = judged ? JUDGED_MAX_CONVERSATION_MESSAGES : MAX_CONVERSATION_MESSAGES;
+        const tooLongDeadline = started + maxDuration;
+        if (tooLongDeadline < now || conversation.numMessages > maxMessages) {
           console.log(`${player.id} leaving conversation with ${otherPlayer.id}.`);
           const messageUuid = crypto.randomUUID();
           conversation.setIsTyping(now, player, messageUuid);

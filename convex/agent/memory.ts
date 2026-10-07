@@ -7,6 +7,7 @@ import { asyncMap } from '../util/asyncMap';
 import { GameId, agentId, conversationId, playerId } from '../aiTown/ids';
 import { SerializedPlayer } from '../aiTown/player';
 import { memoryFields } from './schema';
+import { scoreImportance } from '../decisions';
 
 // How long to wait before updating a memory's last access time.
 export const MEMORY_ACCESS_THROTTLE = 300_000; // In ms
@@ -65,7 +66,14 @@ export async function rememberConversation(
   const description = `Conversation with ${otherPlayer.name} at ${new Date(
     data.conversation._creationTime,
   ).toLocaleString()}: ${content}`;
-  const importance = await calculateImportance(description);
+  const importance = await scoreImportance(
+    ctx,
+    worldId,
+    playerId,
+    player.name,
+    description,
+    'conversation',
+  );
   const { embedding } = await fetchEmbedding(description);
   authors.delete(player.id as GameId<'players'>);
   await ctx.runMutation(selfInternal.insertMemory, {
@@ -243,30 +251,9 @@ export const loadMessages = internalQuery({
   },
 });
 
-async function calculateImportance(description: string) {
-  const { content: importanceRaw } = await chatCompletion({
-    messages: [
-      {
-        role: 'user',
-        content: `On the scale of 0 to 9, where 0 is purely mundane (e.g., brushing teeth, making bed) and 9 is extremely poignant (e.g., a break up, college acceptance), rate the likely poignancy of the following piece of memory.
-      Memory: ${description}
-      Answer on a scale of 0 to 9. Respond with number only, e.g. "5"`,
-      },
-    ],
-    temperature: 0.0,
-    max_tokens: 1,
-  });
-
-  let importance = parseFloat(importanceRaw);
-  if (isNaN(importance)) {
-    importance = +(importanceRaw.match(/\d+/)?.[0] ?? NaN);
-  }
-  if (isNaN(importance)) {
-    console.debug('Could not parse memory importance from: ', importanceRaw);
-    importance = 5;
-  }
-  return importance;
-}
+// The importance score moved behind the decision seam (decisions.ts:
+// scoreImportance); under DECISION_BACKEND=dice it is upstream's prompt and
+// parse, unchanged.
 
 const { embeddingId: _embeddingId, ...memoryFieldsWithoutEmbeddingId } = memoryFields;
 
@@ -372,7 +359,14 @@ async function reflectOnMemories(
     const insights = JSON.parse(reflection) as { insight: string; statementIds: number[] }[];
     const memoriesToSave = await asyncMap(insights, async (item) => {
       const relatedMemoryIds = item.statementIds.map((idx: number) => memories[idx]._id);
-      const importance = await calculateImportance(item.insight);
+      const importance = await scoreImportance(
+        ctx,
+        worldId,
+        playerId,
+        name,
+        item.insight,
+        'reflection',
+      );
       const { embedding } = await fetchEmbedding(item.insight);
       console.debug('adding reflection memory...', item.insight);
       return {

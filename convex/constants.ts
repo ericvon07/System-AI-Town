@@ -44,6 +44,15 @@ export const MAX_CONVERSATION_DURATION = 10 * 60_000; // more time locally
 // Leave a conversation if it has more than 8 messages;
 export const MAX_CONVERSATION_MESSAGES = 8;
 
+// Under the judged decision backends (jev, gemma), leaving is asked before
+// every reply (decisions.ts: decideLeave), and the question tells the agent
+// how long a conversation usually lasts here, as a norm it may go past when
+// the talk is unusually interesting. The caps only stop a conversation nobody
+// chose to end, with a margin above the norm: 40 messages, 30 minutes.
+export const USUAL_CONVERSATION_MESSAGES = 25;
+export const JUDGED_MAX_CONVERSATION_MESSAGES = 40;
+export const JUDGED_MAX_CONVERSATION_DURATION = 30 * 60_000;
+
 // Wait for 1s after sending an input to the engine. We can remove this
 // once we can await on an input being processed.
 export const INPUT_DELAY = 1000;

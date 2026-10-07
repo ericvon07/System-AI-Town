@@ -1,4 +1,6 @@
 // That's right! No imports and no dependencies 🤯
+// (One import: the OpenRouter transport, for CHAT_BACKEND=openrouter.)
+import { gemmaModel, openRouterBaseUrl, openRouterExtras, openRouterKey } from './openrouter';
 
 const OPENAI_EMBEDDING_DIMENSION = 1536;
 const TOGETHER_EMBEDDING_DIMENSION = 768;
@@ -138,32 +140,44 @@ export async function chatCompletion(
   },
 ) {
   const config = getLLMConfig();
-  body.model = body.model ?? config.chatModel;
+  // CHAT_BACKEND=openrouter sends every chat completion (conversations,
+  // summaries, reflections, upstream's importance score) to Gemma through
+  // OpenRouter, pinned to one provider (util/openrouter.ts). Embeddings stay
+  // on the provider above, Ollama.
+  const routed = process.env.CHAT_BACKEND === 'openrouter';
+  body.model = body.model ?? (routed ? gemmaModel() : config.chatModel);
   const stopWords = body.stop ? (typeof body.stop === 'string' ? [body.stop] : body.stop) : [];
-  if (config.stopWords) stopWords.push(...config.stopWords);
+  if (config.stopWords && !routed) stopWords.push(...config.stopWords);
   console.log(body);
   const {
     result: content,
     retries,
     ms,
   } = await retryWithBackoff(async () => {
-    const result = await fetch(config.url + '/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...AuthHeaders(),
-      },
+    const result = await fetch(
+      routed ? openRouterBaseUrl() + '/chat/completions' : config.url + '/v1/chat/completions',
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(routed ? { Authorization: 'Bearer ' + openRouterKey() } : AuthHeaders()),
+        },
 
-      body: JSON.stringify(body),
-    });
+        body: JSON.stringify(routed ? { ...openRouterExtras(), ...body } : body),
+      },
+    );
     if (!result.ok) {
       const error = await result.text();
       console.error({ error });
-      if (result.status === 404 && config.provider === 'ollama') {
+      if (result.status === 404 && config.provider === 'ollama' && !routed) {
         await tryPullOllama(body.model!, error);
       }
       throw {
-        retry: result.status === 429 || result.status >= 500,
+        // A pinned provider blinks in more ways than 429 and 5xx; only a
+        // refusal for good (malformed, key, balance, permission) is final.
+        retry: routed
+          ? ![400, 401, 402, 403].includes(result.status)
+          : result.status === 429 || result.status >= 500,
         error: new Error(`Chat completion failed with code ${result.status}: ${error}`),
       };
     }
@@ -171,9 +185,12 @@ export async function chatCompletion(
       return new ChatCompletionContent(result.body!, stopWords);
     } else {
       const json = (await result.json()) as CreateChatCompletionResponse;
-      const content = json.choices[0].message?.content;
-      if (content === undefined) {
-        throw new Error('Unexpected result from OpenAI: ' + JSON.stringify(json));
+      const content = json.choices?.[0]?.message?.content;
+      if (content === undefined || content === null) {
+        const error = new Error('Unexpected result from OpenAI: ' + JSON.stringify(json));
+        // The router can answer 200 with no choices; that is worth a retry.
+        if (routed) throw { retry: true, error };
+        throw error;
       }
       console.log(content);
       return content;

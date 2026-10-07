@@ -7,6 +7,12 @@
 //   DECISION_BACKEND=jev   each decision is a typed Choice asked of Jev over a
 //                          named-object state built from the persona texts the
 //                          conversation prompts already use.
+//   DECISION_BACKEND=gemma the same question, the same state, asked of Gemma
+//                          through OpenRouter (util/openrouter.ts) as a prompt;
+//                          the label it writes back is matched to the options,
+//                          and an answer off the list falls back to the die.
+//                          Sampled at temperature 1, the like-for-like of
+//                          JEV_POLICY=sample.
 //
 //   JEV_POLICY=sample      (default) draw the act from Jev's probabilities, the
 //                          like-for-like replacement of a die.
@@ -19,9 +25,19 @@
 //                  player not in cooldown -- upstream sorts candidates by a
 //                  distance that is always 0, see findConversationCandidate)
 //
-// One deliberate change of set, the jev backend only: invite_target offers
-// 'no one'. Upstream invites whenever a candidate exists, so a persona that
-// wants to avoid people has no way to say so in that decision.
+// One deliberate change of set, the judged backends only: invite_target
+// offers 'no one'. Upstream invites whenever a candidate exists, so a persona
+// that wants to avoid people has no way to say so in that decision.
+//
+// Two more decisions, which upstream makes with a rule or with the LLM:
+//   leave_conversation  before each reply, say more or leave (dice: a rule,
+//                       leave after 8 messages or 10 minutes; the judged
+//                       backends ask, told that conversations here usually
+//                       wrap up after about 25 messages, under a cap of 40,
+//                       agent.ts)
+//   importance          the 0-9 poignancy of a new memory (dice: upstream's
+//                       prompt on the chat LLM; gemma: the same prompt on
+//                       Gemma; jev: a typed Score over the same 0-9 scale)
 //
 // Every decision of both backends lands in the `decisions` table with its
 // options, the act taken and the probabilities behind it (by construction for
@@ -31,23 +47,31 @@ import { v } from 'convex/values';
 import { ActionCtx, internalMutation, internalQuery, query } from './_generated/server';
 import { internal } from './_generated/api';
 import { Id } from './_generated/dataModel';
-import { ACTIVITIES, INVITE_ACCEPT_PROBABILITY, PLAYER_CONVERSATION_COOLDOWN } from './constants';
-import { askJev, choice } from './util/jev';
+import {
+  ACTIVITIES,
+  INVITE_ACCEPT_PROBABILITY,
+  PLAYER_CONVERSATION_COOLDOWN,
+  USUAL_CONVERSATION_MESSAGES,
+} from './constants';
+import { askJev, choice, score, ScoreAnswer } from './util/jev';
+import { askOpenRouter, gemmaModel } from './util/openrouter';
+import { chatCompletion, getLLMConfig } from './util/llm';
 import { distance } from './util/geometry';
 import { SerializedPlayer } from './aiTown/player';
-import { decisionFields } from './schema';
+import { decisionFields } from './decisionFields';
 
-export type DecisionBackend = 'dice' | 'jev';
+export type DecisionBackend = 'dice' | 'jev' | 'gemma';
 
 export function decisionBackend(): DecisionBackend {
-  return process.env.DECISION_BACKEND === 'jev' ? 'jev' : 'dice';
+  const backend = process.env.DECISION_BACKEND;
+  return backend === 'jev' || backend === 'gemma' ? backend : 'dice';
 }
 
 function jevPolicy(): 'sample' | 'argmax' {
   return process.env.JEV_POLICY === 'argmax' ? 'argmax' : 'sample';
 }
 
-type DecisionName = 'activity' | 'accept_invite' | 'invite_target';
+type DecisionName = 'activity' | 'accept_invite' | 'invite_target' | 'leave_conversation';
 type Probability = { option: string; p: number };
 
 export const record = internalMutation({
@@ -118,6 +142,41 @@ export const decisionContext = internalQuery({
   },
 });
 
+// The conversation so far, for leave_conversation: when it started and who
+// said what, in order.
+export const conversationSoFar = internalQuery({
+  args: { worldId: v.id('worlds'), conversationId: v.string() },
+  handler: async (ctx, args) => {
+    const world = await ctx.db.get(args.worldId);
+    if (!world) {
+      throw new Error(`World ${args.worldId} not found`);
+    }
+    const conversation = world.conversations.find((c) => c.id === args.conversationId);
+    const messages = await ctx.db
+      .query('messages')
+      .withIndex('conversationId', (q) =>
+        q.eq('worldId', args.worldId).eq('conversationId', args.conversationId as any),
+      )
+      .collect();
+    const names = new Map<string, string>();
+    for (const message of messages) {
+      if (!names.has(message.author)) {
+        const description = await ctx.db
+          .query('playerDescriptions')
+          .withIndex('worldId', (q) =>
+            q.eq('worldId', args.worldId).eq('playerId', message.author),
+          )
+          .first();
+        names.set(message.author, description?.name ?? message.author);
+      }
+    }
+    return {
+      created: conversation?.created ?? messages[0]?._creationTime ?? Date.now(),
+      transcript: messages.map((m) => ({ speaker: names.get(m.author)!, text: m.text })),
+    };
+  },
+});
+
 function minutesAgo(now: number, ts: number | null) {
   return ts === null ? null : Math.round((now - ts) / 60_000);
 }
@@ -143,15 +202,62 @@ type Base = {
   name: string;
   otherName?: string;
   options: string[];
+  conversationId?: string;
+  messagesSoFar?: number;
 };
+
+type Question = { state: unknown; instructions: string; criteria: Record<string, string> };
+
+// The seam's question as a prompt, for the gemma backend: the same state, the
+// same instructions, the same options with the same descriptions. Only the
+// shape of the answer changes, from a typed Choice to a label written back.
+export function choicePrompt(q: Question) {
+  const options = Object.entries(q.criteria)
+    .map(([label, description]) => `- ${label}: ${description}`)
+    .join('\n');
+  return [
+    {
+      role: 'user' as const,
+      content:
+        `Here is the current state, as JSON:\n\n${JSON.stringify(q.state, null, 2)}\n\n` +
+        `${q.instructions}\n\nOptions:\n${options}\n\n` +
+        'Answer with exactly one option name from the list above, written exactly as it ' +
+        'appears there, and nothing else.',
+    },
+  ];
+}
+
+function normalize(text: string) {
+  return text
+    .toLowerCase()
+    .replace(/[`*"'.!:]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+// An answer is on the list when, stripped of quotes, emphasis and a full
+// stop, it is one of the options; or when it names exactly one option and no
+// other (a label wrapped in a sentence). The readout tells the two apart by
+// comparing `raw` with `chosen`. Anything else is off the list.
+export function matchOption(raw: string, options: string[]): string | null {
+  const answer = normalize(raw);
+  const exact = options.find((o) => normalize(o) === answer);
+  if (exact) {
+    return exact;
+  }
+  const escape = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const named = options.filter((o) => new RegExp(`\\b${escape(normalize(o))}\\b`).test(answer));
+  return named.length === 1 ? named[0] : null;
+}
 
 async function decide(
   ctx: ActionCtx,
   base: Base,
   dice: () => { chosen: string; probabilities: Probability[] },
-  jev: () => Promise<{ state: unknown; instructions: string; criteria: Record<string, string> }>,
+  question: () => Promise<Question>,
 ): Promise<string> {
-  if (decisionBackend() === 'dice') {
+  const backend = decisionBackend();
+  if (backend === 'dice') {
     const { chosen, probabilities } = dice();
     await ctx.runMutation(internal.decisions.record, {
       ...base,
@@ -161,11 +267,63 @@ async function decide(
     });
     return chosen;
   }
-  const policy = jevPolicy();
-  const { state, instructions, criteria } = await jev();
+  const policy = backend === 'gemma' ? 'sample' : jevPolicy();
+  const q = await question();
   const started = Date.now();
+  const fallBack = async (
+    e: unknown,
+    extra: { raw?: string; model?: string; provider?: string; costUsd?: number } = {},
+  ) => {
+    const { chosen, probabilities } = dice();
+    console.error(`${backend} ${base.decision} for ${base.name} failed, the die decided:`, e);
+    await ctx.runMutation(internal.decisions.record, {
+      ...base,
+      backend,
+      policy,
+      chosen,
+      probabilities,
+      state: q.state,
+      latencyMs: Date.now() - started,
+      fallback: true,
+      error: e instanceof Error ? e.message : String(e),
+      ...extra,
+    });
+    return chosen;
+  };
+  if (backend === 'gemma') {
+    let answer;
+    try {
+      answer = await askOpenRouter(choicePrompt(q), { maxTokens: 24, temperature: 1 });
+    } catch (e) {
+      return await fallBack(e, { model: gemmaModel() });
+    }
+    const meta = {
+      raw: answer.content,
+      model: answer.model,
+      provider: answer.provider ?? undefined,
+      costUsd: answer.costUsd ?? undefined,
+    };
+    const chosen = matchOption(answer.content, base.options);
+    if (!chosen) {
+      return await fallBack(new Error(`off the list: ${JSON.stringify(answer.content)}`), meta);
+    }
+    await ctx.runMutation(internal.decisions.record, {
+      ...base,
+      backend: 'gemma',
+      policy,
+      chosen,
+      // One sample, so the only probability there is: the act itself.
+      probabilities: base.options.map((option) => ({ option, p: option === chosen ? 1 : 0 })),
+      state: q.state,
+      latencyMs: answer.latencyMs,
+      ...meta,
+    });
+    return chosen;
+  }
   try {
-    const { answers } = await askJev(state, { [base.decision]: choice(instructions, criteria) });
+    const { answers, model } = await askJev(q.state, {
+      [base.decision]: choice(q.instructions, q.criteria),
+    });
     const answer = answers[base.decision];
     if (!answer || !base.options.includes(answer.choice)) {
       throw new Error(`no usable answer: ${JSON.stringify(answer)}`);
@@ -182,25 +340,13 @@ async function decide(
       chosen,
       probabilities,
       jevChoice: answer.choice,
-      state,
+      state: q.state,
       latencyMs: Date.now() - started,
+      model,
     });
     return chosen;
   } catch (e) {
-    const { chosen, probabilities } = dice();
-    console.error(`jev ${base.decision} for ${base.name} failed, the die decided:`, e);
-    await ctx.runMutation(internal.decisions.record, {
-      ...base,
-      backend: 'jev',
-      policy,
-      chosen,
-      probabilities,
-      state,
-      latencyMs: Date.now() - started,
-      fallback: true,
-      error: e instanceof Error ? e.message : String(e),
-    });
-    return chosen;
+    return await fallBack(e);
   }
 }
 
@@ -276,6 +422,82 @@ export function inviteQuestion(
       ]),
     ),
   };
+}
+
+export function leaveQuestion(
+  me: Me,
+  other: { name: string; identity: string },
+  minutesSoFar: number,
+  transcript: Array<{ speaker: string; text: string }>,
+  usualMessages: number = USUAL_CONVERSATION_MESSAGES,
+) {
+  return {
+    state: {
+      me,
+      other: { name: other.name, identity: other.identity },
+      conversation: {
+        messages_so_far: transcript.length,
+        minutes_so_far: minutesSoFar,
+        usual_length_messages: usualMessages,
+        transcript,
+      },
+    },
+    instructions:
+      "`me.name` is talking with `other.name`, and it is `me.name`'s turn to speak. Does " +
+      '`me.name` keep the conversation going, or say goodbye and leave it now? In this ' +
+      'town a conversation usually wraps up after about `conversation.usual_length_messages` ' +
+      'messages; people stay longer only when the talk is unusually interesting to them. ' +
+      'Weigh who `me` is (`me.identity`), what they want (`me.goal`), who `other` is ' +
+      '(`other.identity`), what has been said so far (`conversation.transcript`) and how ' +
+      'long they have been talking (`conversation.messages_so_far` messages over ' +
+      '`conversation.minutes_so_far` minutes).',
+    criteria: {
+      continue: 'keep talking: say something more',
+      leave: 'say goodbye and leave the conversation',
+    },
+  };
+}
+
+// Upstream's importance prompt, verbatim (agent/memory.ts before the seam):
+// the dice and gemma backends send it to an LLM and parse a digit back.
+export function upstreamImportancePrompt(description: string) {
+  return `On the scale of 0 to 9, where 0 is purely mundane (e.g., brushing teeth, making bed) and 9 is extremely poignant (e.g., a break up, college acceptance), rate the likely poignancy of the following piece of memory.
+      Memory: ${description}
+      Answer on a scale of 0 to 9. Respond with number only, e.g. "5"`;
+}
+
+// The same scale as a typed Score: ten levels, 0 to 9. The two ends quote
+// upstream's anchors; the eight between are the System One Lab's (its
+// jev_questions.py, deviation D2, the paper's event poignancy), whose ends
+// are the same two anchors.
+export const IMPORTANCE_LEVELS = [
+  'Purely mundane: brushing teeth, making the bed.',
+  'Routine upkeep of the day, noticed and immediately forgotten.',
+  'Ordinary, with some small personal texture to it.',
+  'Mildly notable: a small departure from how the day usually goes.',
+  'Noticeable: the sort of thing worth mentioning to someone later.',
+  'Personally meaningful: it touches something this person cares about.',
+  'Clearly significant: likely to still be on their mind in a few days.',
+  'Emotionally charged, or consequential for their plans.',
+  'Deeply affecting: it changes how they feel about someone or something.',
+  'Extremely poignant: a break up, a college acceptance.',
+];
+
+export function importanceQuestion(description: string) {
+  return {
+    state: { memory: description },
+    instructions: 'Rate the likely poignancy of `memory`, a piece of memory.',
+    criteria: IMPORTANCE_LEVELS,
+  };
+}
+
+// Upstream's parse: a number, else the first digit, else 5.
+export function parseImportance(raw: string): { score: number; parsed: boolean } {
+  let score = parseFloat(raw);
+  if (isNaN(score)) {
+    score = +(raw.match(/\d+/)?.[0] ?? NaN);
+  }
+  return isNaN(score) ? { score: 5, parsed: false } : { score, parsed: true };
 }
 
 // --- the three decisions -------------------------------------------------
@@ -371,7 +593,7 @@ export async function decideInviteTarget(
   });
   const byLabel = new Map(labelled.map((c) => [c.label, c]));
   const backend = decisionBackend();
-  const options = labelled.map((c) => c.label).concat(backend === 'jev' ? [NO_ONE] : []);
+  const options = labelled.map((c) => c.label).concat(backend === 'dice' ? [] : [NO_ONE]);
 
   let diceInvitee: string | undefined;
   if (backend === 'dice') {
@@ -387,7 +609,7 @@ export async function decideInviteTarget(
     ctx,
     { worldId, decision: 'invite_target', playerId: player.id, name: me.name, options },
     () => {
-      // Under the jev backend this is the fallback: upstream's pick is the
+      // Under the judged backends this is the fallback: upstream's pick is the
       // first candidate, so take it without a second query.
       const pick = diceInvitee ?? labelled[0].playerId;
       const label = labelled.find((c) => c.playerId === pick)?.label ?? labelled[0].label;
@@ -416,6 +638,148 @@ export async function decideInviteTarget(
   return { invitee: byLabel.get(chosen)!.playerId };
 }
 
+// Under the judged backends, before each reply: say more, or leave. Never
+// asked under dice, where the rule in agent.ts decides; the die's stand-in
+// for a failed call is that rule's answer below its cap, 'continue'.
+export async function decideLeave(
+  ctx: ActionCtx,
+  worldId: Id<'worlds'>,
+  playerId: string,
+  otherPlayerId: string,
+  conversationId: string,
+  now: number,
+) {
+  const { me, others } = await ctx.runQuery(internal.decisions.decisionContext, {
+    worldId,
+    playerId,
+    otherIds: [otherPlayerId],
+    now,
+  });
+  const other = others[0];
+  const { created, transcript } = await ctx.runQuery(internal.decisions.conversationSoFar, {
+    worldId,
+    conversationId,
+  });
+  const chosen = await decide(
+    ctx,
+    {
+      worldId,
+      decision: 'leave_conversation',
+      playerId,
+      name: me.name,
+      otherName: other.name,
+      options: ['continue', 'leave'],
+      conversationId,
+      messagesSoFar: transcript.length,
+    },
+    () => ({
+      chosen: 'continue',
+      probabilities: [
+        { option: 'continue', p: 1 },
+        { option: 'leave', p: 0 },
+      ],
+    }),
+    async () =>
+      leaveQuestion(me, other, Math.round((now - created) / 6_000) / 10, transcript),
+  );
+  return chosen === 'leave';
+}
+
+// The importance of a new memory, by the arm's judge: upstream's prompt on
+// the chat LLM (dice), the same prompt on Gemma (gemma), a typed Score (jev).
+// A failed Jev call falls back to upstream's path; an unparseable answer gets
+// upstream's 5. Every score is a row.
+export async function scoreImportance(
+  ctx: ActionCtx,
+  worldId: Id<'worlds'>,
+  playerId: string,
+  name: string,
+  description: string,
+  memoryKind: 'conversation' | 'reflection',
+): Promise<number> {
+  const backend = decisionBackend();
+  const base = {
+    worldId,
+    decision: 'importance' as const,
+    playerId,
+    name,
+    options: [],
+    probabilities: [],
+    state: { memory: description },
+    memoryKind,
+    backend,
+  };
+  const started = Date.now();
+  const llmPath = async (error?: string) => {
+    const { content } = await chatCompletion({
+      messages: [{ role: 'user', content: upstreamImportancePrompt(description) }],
+      temperature: 0.0,
+      max_tokens: 1,
+    });
+    const { score, parsed } = parseImportance(content);
+    if (!parsed) {
+      console.debug('Could not parse memory importance from: ', content);
+    }
+    await ctx.runMutation(internal.decisions.record, {
+      ...base,
+      chosen: String(score),
+      score,
+      raw: content,
+      model: process.env.CHAT_BACKEND === 'openrouter' ? gemmaModel() : getLLMConfig().chatModel,
+      latencyMs: Date.now() - started,
+      ...(parsed && !error ? {} : { fallback: true }),
+      ...(error ? { error } : parsed ? {} : { error: 'unparseable, scored 5' }),
+    });
+    return score;
+  };
+  if (backend === 'dice') {
+    return await llmPath();
+  }
+  if (backend === 'gemma') {
+    try {
+      const answer = await askOpenRouter(
+        [{ role: 'user', content: upstreamImportancePrompt(description) }],
+        { maxTokens: 1, temperature: 0 },
+      );
+      const { score, parsed } = parseImportance(answer.content);
+      await ctx.runMutation(internal.decisions.record, {
+        ...base,
+        chosen: String(score),
+        score,
+        raw: answer.content,
+        model: answer.model,
+        provider: answer.provider ?? undefined,
+        costUsd: answer.costUsd ?? undefined,
+        latencyMs: answer.latencyMs,
+        ...(parsed ? {} : { fallback: true, error: 'unparseable, scored 5' }),
+      });
+      return score;
+    } catch (e) {
+      return await llmPath(`gemma failed: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }
+  try {
+    const q = importanceQuestion(description);
+    const { answers, model } = await askJev<ScoreAnswer>(q.state, {
+      importance: score(q.instructions, q.criteria),
+    });
+    const value = answers.importance?.score;
+    if (typeof value !== 'number' || isNaN(value)) {
+      throw new Error(`no usable answer: ${JSON.stringify(answers.importance)}`);
+    }
+    await ctx.runMutation(internal.decisions.record, {
+      ...base,
+      chosen: String(Math.round(value * 100) / 100),
+      score: value,
+      model,
+      latencyMs: Date.now() - started,
+    });
+    return value;
+  } catch (e) {
+    return await llmPath(`jev failed: ${e instanceof Error ? e.message : String(e)}`);
+  }
+}
+
 // --- the readout ---------------------------------------------------------
 
 // Per backend, decision and persona: how many decisions, how often each
@@ -436,6 +800,7 @@ export const summary = query({
         fallbacks: number;
         taken: Map<string, number>;
         pSum: Map<string, number>;
+        scoreSum: number;
       }
     >();
     for (const row of rows) {
@@ -453,12 +818,18 @@ export const summary = query({
           fallbacks: 0,
           taken: new Map(),
           pSum: new Map(),
+          scoreSum: 0,
         };
         groups.set(key, g);
       }
       g.n += 1;
       if (row.fallback) {
         g.fallbacks += 1;
+      }
+      // importance has no options: its reading is the mean score.
+      if (row.decision === 'importance') {
+        g.scoreSum += row.score ?? 0;
+        continue;
       }
       // invite_target labels are names, which differ per state; group them
       // as 'someone' vs 'no one' so the rate reads across states.
@@ -483,6 +854,9 @@ export const summary = query({
         name: g.name,
         n: g.n,
         fallbacks: g.fallbacks,
+        ...(g.decision === 'importance'
+          ? { meanScore: Math.round((g.scoreSum / g.n) * 100) / 100 }
+          : {}),
         options: [...new Set([...g.taken.keys(), ...g.pSum.keys()])].sort().map((option) => ({
           option,
           taken: g.taken.get(option) ?? 0,

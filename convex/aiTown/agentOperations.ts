@@ -14,7 +14,13 @@ import { ACTIVITY_COOLDOWN, CONVERSATION_COOLDOWN } from '../constants';
 import { api, internal } from '../_generated/api';
 import { sleep } from '../util/sleep';
 import { serializedPlayer } from './player';
-import { decideAcceptInvite, decideActivity, decideInviteTarget } from '../decisions';
+import {
+  decideAcceptInvite,
+  decideActivity,
+  decideInviteTarget,
+  decideLeave,
+  decisionBackend,
+} from '../decisions';
 
 export const agentRememberConversation = internalAction({
   args: {
@@ -56,8 +62,25 @@ export const agentGenerateMessage = internalAction({
     messageUuid: v.string(),
   },
   handler: async (ctx, args) => {
+    let type = args.type;
+    // Under the judged backends, before every reply the agent decides whether
+    // to say more or leave (decisions.ts); under dice only the rule in
+    // agent.ts ends a conversation.
+    if (type === 'continue' && decisionBackend() !== 'dice') {
+      const leave = await decideLeave(
+        ctx,
+        args.worldId,
+        args.playerId,
+        args.otherPlayerId,
+        args.conversationId,
+        Date.now(),
+      );
+      if (leave) {
+        type = 'leave';
+      }
+    }
     let completionFn;
-    switch (args.type) {
+    switch (type) {
       case 'start':
         completionFn = startConversationMessage;
         break;
@@ -68,7 +91,7 @@ export const agentGenerateMessage = internalAction({
         completionFn = leaveConversationMessage;
         break;
       default:
-        assertNever(args.type);
+        assertNever(type);
     }
     const text = await completionFn(
       ctx,
@@ -85,7 +108,7 @@ export const agentGenerateMessage = internalAction({
       playerId: args.playerId,
       text,
       messageUuid: args.messageUuid,
-      leaveConversation: args.type === 'leave',
+      leaveConversation: type === 'leave',
       operationId: args.operationId,
     });
   },

@@ -2,9 +2,10 @@
 //
 // One HTTP call carries one named-object `state` and a map of typed
 // `questions`; every question is evaluated in parallel against that state and
-// comes back with its own typed answer. Only `choice` is used here:
+// comes back with its own typed answer. Two types are used here:
 //
 //   choice -> { choice: <label>, probabilities: { label: p }, confidence }
+//   score  -> { score: <float in [0, n - 1]>, confidence }
 //
 // The wire format mirrors the System One Lab's Python client
 // (generative_agents/reverie/backend_server/persona/prompt_template/jev.py),
@@ -20,6 +21,19 @@ export type ChoiceQuestion = {
   type: 'choice';
   instructions: string;
   criteria: Record<string, string | null>;
+};
+
+// score -> { score: <float in [0, n - 1]>, legend, confidence }, where n is
+// the number of rubric levels in `criteria`, lowest first.
+export type ScoreQuestion = {
+  type: 'score';
+  instructions: string;
+  criteria: string[];
+};
+
+export type ScoreAnswer = {
+  score: number;
+  confidence?: number;
 };
 
 export type ChoiceAnswer = {
@@ -44,14 +58,18 @@ export function choice(
   return { type: 'choice', instructions, criteria };
 }
 
+export function score(instructions: string, criteria: string[]): ScoreQuestion {
+  return { type: 'score', instructions, criteria };
+}
+
 export function jevConfigured() {
   return !!process.env.TYPESAFE_API_KEY;
 }
 
-export async function askJev(
+export async function askJev<A = ChoiceAnswer>(
   state: unknown,
-  questions: Record<string, ChoiceQuestion>,
-): Promise<{ answers: Record<string, ChoiceAnswer>; model?: string; latencyMs: number }> {
+  questions: Record<string, ChoiceQuestion | ScoreQuestion>,
+): Promise<{ answers: Record<string, A>; model?: string; latencyMs: number }> {
   const apiKey = process.env.TYPESAFE_API_KEY;
   if (!apiKey) {
     throw new JevError('no API key: run npx convex env set TYPESAFE_API_KEY <key>');
