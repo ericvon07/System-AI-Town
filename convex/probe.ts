@@ -251,45 +251,142 @@ export const worldMemories = internalQuery({
 // at each of `lengths` messages. What should move P(leave) is who `me` is and
 // how long the talk has gone round in circles.
 //
-//   npx convex run probe:probeLeave
+//   npx convex run probe:probeLeave                                  Jev
+//   npx convex run probe:probeLeave '{"backend": "gemma", "samples": 10}'
+//
+// Under gemma, P(leave) is the share of `samples` answers naming `leave` (the
+// gemma backend's prompt, choicePrompt, at temperature 1); answers naming
+// neither option are counted in `offList`, not in either share.
+const SMALL_TALK = [
+  'Nice weather today, isn’t it?',
+  'Yes, very nice. Sunny.',
+  'Have you been well?',
+  'Well enough, thanks. And you?',
+];
+
+function smallTalkQuestion(me: Me, other: Me, n: number) {
+  const transcript = Array.from({ length: n }, (_, i) => ({
+    speaker: i % 2 === 0 ? other.name : me.name,
+    text: SMALL_TALK[i % SMALL_TALK.length],
+  }));
+  return leaveQuestion(me, other, Math.round(n * 0.35 * 10) / 10, transcript);
+}
+
 export const probeLeave = internalAction({
-  args: { lengths: v.optional(v.array(v.number())) },
+  args: {
+    lengths: v.optional(v.array(v.number())),
+    backend: v.optional(v.union(v.literal('jev'), v.literal('gemma'))),
+    samples: v.optional(v.number()),
+  },
   handler: async (_ctx, args) => {
     const lengths = args.lengths ?? [2, 8, 20, 25, 30, 38];
+    const backend = args.backend ?? 'jev';
+    const samples = args.samples ?? 10;
     const people: Me[] = Descriptions.map((d) => ({
       name: d.name,
       identity: d.identity,
       goal: d.plan,
     }));
-    const smallTalk = [
-      'Nice weather today, isn’t it?',
-      'Yes, very nice. Sunny.',
-      'Have you been well?',
-      'Well enough, thanks. And you?',
-    ];
     let model: string | undefined;
+    let costUsd = 0;
+    let calls = 0;
+    const providers = new Set<string>();
+    const offList: Array<{ name: string; other: string; messages: number; raw: string }> = [];
     const rows: Array<{ name: string; other: string; messages: number; leave: number }> = [];
     for (const me of people) {
       for (const other of people.filter((p) => p.name !== me.name)) {
         await Promise.all(
           lengths.map(async (n) => {
-            const transcript = Array.from({ length: n }, (_, i) => ({
-              speaker: i % 2 === 0 ? other.name : me.name,
-              text: smallTalk[i % smallTalk.length],
-            }));
-            const q = leaveQuestion(me, other, Math.round(n * 0.35 * 10) / 10, transcript);
-            const response = await askJev(q.state, { q: choice(q.instructions, q.criteria) });
-            model = response.model;
-            rows.push({
-              name: me.name,
-              other: other.name,
-              messages: n,
-              leave: response.answers.q.probabilities.leave ?? 0,
-            });
+            const q = smallTalkQuestion(me, other, n);
+            let leave: number;
+            if (backend === 'jev') {
+              const response = await askJev(q.state, { q: choice(q.instructions, q.criteria) });
+              model = response.model;
+              leave = response.answers.q.probabilities.leave ?? 0;
+            } else {
+              const options = Object.keys(q.criteria);
+              const answers = await Promise.all(
+                Array.from({ length: samples }, () =>
+                  askOpenRouter(choicePrompt(q), { maxTokens: 24, temperature: 1 }),
+                ),
+              );
+              let leaves = 0;
+              for (const answer of answers) {
+                calls += 1;
+                costUsd += answer.costUsd ?? 0;
+                model = answer.model;
+                if (answer.provider) {
+                  providers.add(answer.provider);
+                }
+                const chosen = matchOption(answer.content, options);
+                if (chosen === 'leave') {
+                  leaves += 1;
+                } else if (!chosen) {
+                  offList.push({ name: me.name, other: other.name, messages: n, raw: answer.content });
+                }
+              }
+              leave = leaves / samples;
+            }
+            rows.push({ name: me.name, other: other.name, messages: n, leave });
           }),
         );
       }
     }
-    return { model, lengths, rows };
+    return backend === 'jev'
+      ? { backend, model, lengths, rows }
+      : { backend, model, providers: [...providers], samples, calls, costUsd, offList, lengths, rows };
+  },
+});
+
+// What each judge is handed for one persona, side by side, with no call made:
+// for every decision, the question Jev receives (state, instructions and the
+// options with their descriptions) and the prompt Gemma reads, built from that
+// same object (choicePrompt; for importance, upstream's prompt, FT-E). The
+// states are the probes' — everyone a stranger at `distance` tiles, the leave
+// question on eight messages of small talk.
+//
+//   npx convex run probe:showQuestions '{"name": "Bob"}'
+export const showQuestions = internalQuery({
+  args: { name: v.optional(v.string()), distance: v.optional(v.number()) },
+  handler: async (_ctx, args) => {
+    const distance = args.distance ?? 5;
+    const people: Me[] = Descriptions.map((d) => ({
+      name: d.name,
+      identity: d.identity,
+      goal: d.plan,
+    }));
+    const me = people.find((p) => p.name === (args.name ?? 'Bob'));
+    if (!me) {
+      throw new Error(`no persona named ${args.name}`);
+    }
+    const others = people.filter((p) => p.name !== me.name);
+    const questions: Record<string, Question> = {
+      activity: activityQuestion(
+        me,
+        ACTIVITIES.map((a) => a.description),
+      ),
+      accept_invite: acceptQuestion(
+        me,
+        { name: others[0].name, identity: others[0].identity, lastEnded: null },
+        0,
+      ),
+      invite_target: inviteQuestion(
+        me,
+        others.map((p) => ({ label: p.name, identity: p.identity, distance, lastEnded: null })),
+        0,
+      ),
+      leave_conversation: smallTalkQuestion(me, others[0], 8),
+    };
+    const memory = `${me.name} talked with ${others[0].name} about the weather.`;
+    const importance = importanceQuestion(memory);
+    return {
+      ...Object.fromEntries(
+        Object.entries(questions).map(([decision, q]) => [
+          decision,
+          { jev: q, gemma: choicePrompt(q)[0].content },
+        ]),
+      ),
+      importance: { jev: importance, gemma: upstreamImportancePrompt(memory) },
+    };
   },
 });
