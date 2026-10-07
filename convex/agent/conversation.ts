@@ -6,7 +6,7 @@ import * as memory from './memory';
 import { api, internal } from '../_generated/api';
 import * as embeddingsCache from './embeddingsCache';
 import { GameId, conversationId, playerId } from '../aiTown/ids';
-import { NUM_MEMORIES_TO_SEARCH } from '../constants';
+import { MESSAGE_WORDS_CAP, MESSAGE_WORDS_USUAL, NUM_MEMORIES_TO_SEARCH } from '../constants';
 
 const selfInternal = internal.agent.conversation;
 
@@ -52,6 +52,13 @@ export async function startConversationMessage(
       `Be sure to include some detail or question about a previous conversation in your greeting.`,
     );
   }
+  // D7: upstream's opening prompt names no length; replies and goodbyes keep
+  // upstream's "within 200 characters".
+  if (messagesCapped()) {
+    prompt.push(
+      `Keep your message under ${MESSAGE_WORDS_USUAL} words; go longer only if you truly need to in order to explain an idea, and never past ${MESSAGE_WORDS_CAP} words.`,
+    );
+  }
   const lastPrompt = `${player.name} to ${otherPlayer.name}:`;
   const messages: LLMMessage[] = [
     {
@@ -67,7 +74,32 @@ export async function startConversationMessage(
     max_tokens: 300,
     stop: stopWords(otherPlayer.name, player.name),
   });
-  return trimContentPrefx(content, lastPrompt);
+  const message = trimContentPrefx(content, lastPrompt);
+  return messagesCapped() ? capWords(message) : message;
+}
+
+// D7, under MESSAGE_LENGTH=capped; unset, the messages are upstream's.
+function messagesCapped() {
+  return process.env.MESSAGE_LENGTH === 'capped';
+}
+
+// D7: no message past MESSAGE_WORDS_CAP words. The cut falls at the end of the
+// last complete sentence inside the cap, keeping the text as written; with no
+// sentence end inside it, at the cap, marked with an ellipsis.
+export function capWords(text: string, cap: number = MESSAGE_WORDS_CAP): string {
+  const words = [...text.matchAll(/\S+/g)];
+  if (words.length <= cap) {
+    return text;
+  }
+  const last = words[cap - 1];
+  const head = text.slice(0, last.index! + last[0].length);
+  const ends = [...head.matchAll(/[.!?…]["'”’)\]]*(?=\s|$)/g)];
+  console.log(`capping a message of ${words.length} words at ${cap}`);
+  if (ends.length) {
+    const end = ends[ends.length - 1];
+    return head.slice(0, end.index! + end[0].length);
+  }
+  return head + '…';
 }
 
 function trimContentPrefx(content: string, prompt: string) {
@@ -133,7 +165,8 @@ export async function continueConversationMessage(
     max_tokens: 300,
     stop: stopWords(otherPlayer.name, player.name),
   });
-  return trimContentPrefx(content, lastPrompt);
+  const message = trimContentPrefx(content, lastPrompt);
+  return messagesCapped() ? capWords(message) : message;
 }
 
 export async function leaveConversationMessage(
@@ -182,7 +215,8 @@ export async function leaveConversationMessage(
     max_tokens: 300,
     stop: stopWords(otherPlayer.name, player.name),
   });
-  return trimContentPrefx(content, lastPrompt);
+  const message = trimContentPrefx(content, lastPrompt);
+  return messagesCapped() ? capWords(message) : message;
 }
 
 function agentPrompts(

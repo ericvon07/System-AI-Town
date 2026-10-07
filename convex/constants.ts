@@ -85,3 +85,13 @@ export const ENGINE_ACTION_DURATION = 30000;
 export const MAX_PATHFINDS_PER_STEP = 16;
 
 export const DEFAULT_NAME = 'Me';
+
+// The length of a message an agent writes (deviation D7, the author's choice,
+// 2026-10-07), under MESSAGE_LENGTH=capped; unset, upstream's prompts as
+// published. Upstream asks replies and goodbyes for "within 200 characters"
+// and the opening message for nothing, so an opening ran to 130 words on
+// Gemma. Capped, the opening prompt names MESSAGE_WORDS_USUAL and
+// MESSAGE_WORDS_CAP, and every message is cut at MESSAGE_WORDS_CAP words, at
+// the end of its last complete sentence.
+export const MESSAGE_WORDS_USUAL = 50;
+export const MESSAGE_WORDS_CAP = 100;

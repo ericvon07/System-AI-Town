@@ -40,6 +40,16 @@ else
   cx env set DECISION_BACKEND "$arm" >/dev/null
 fi
 chat=$(cx env get CHAT_BACKEND 2>/dev/null || true)
+# The model that writes the messages, summaries and reflections, as llm.ts and
+# openrouter.ts default it.
+if [ "$chat" = openrouter ]; then
+  chat_model=$(cx env get GEMMA_MODEL 2>/dev/null || true)
+  chat_model=${chat_model:-google/gemma-4-31b-it}
+else
+  chat_model=$(cx env get OLLAMA_MODEL 2>/dev/null || true)
+  chat_model=${chat_model:-llama3}
+fi
+message_length=$(cx env get MESSAGE_LENGTH 2>/dev/null || true)
 cx run init >/dev/null
 world=$(cx run world:defaultWorldStatus | python3 -c 'import sys, json; print(json.load(sys.stdin)["worldId"])')
 start=$(date '+%F %T')
@@ -77,7 +87,8 @@ cx data decisions --limit 10000 --format jsonLines 2>/dev/null |
   python3 -c "import sys, json; [print(l, end='') for l in sys.stdin if json.loads(l)['worldId'] == '$world']" \
     >"$out/decisions.jsonl"
 cat >"$out/run.json" <<JSON
-{"arm": "$arm", "chat_backend": "${chat:-ollama}", "world": "$world", "start": "$start",
+{"arm": "$arm", "chat_backend": "${chat:-ollama}", "chat_model": "$chat_model",
+ "message_length": "${message_length:-upstream}", "world": "$world", "start": "$start",
  "end": "$(date '+%F %T')", "minutes": $minutes, "code": "$code",
  "openrouter_usage_start": ${spent0:-null}, "openrouter_usage_end": ${spent1:-null}}
 JSON
