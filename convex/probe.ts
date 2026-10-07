@@ -401,18 +401,24 @@ export const showQuestions = internalQuery({
 //
 //   npx convex run probe:probeVariants '{"family": "sociability"}'
 //   npx convex run probe:probeVariants '{"family": "sociability", "backend": "gemma", "samples": 10}'
+//
+// A call has about five minutes; a family of Gemma's answers can pass that, so
+// `only` asks a subset of the family's characters, by name, and the halves
+// are joined afterwards.
 export const probeVariants = internalAction({
   args: {
     family: v.string(),
+    only: v.optional(v.array(v.string())),
     backend: v.optional(v.union(v.literal('jev'), v.literal('gemma'))),
     samples: v.optional(v.number()),
     lengths: v.optional(v.array(v.number())),
   },
   handler: async (_ctx, args) => {
-    const variants = VARIANT_FAMILIES[args.family];
-    if (!variants) {
+    const family = VARIANT_FAMILIES[args.family];
+    if (!family) {
       throw new Error(`no family ${args.family}: ${Object.keys(VARIANT_FAMILIES).join(', ')}`);
     }
+    const variants = args.only ? family.filter((d) => args.only!.includes(d.variant)) : family;
     const backend = args.backend ?? 'jev';
     const samples = args.samples ?? 10;
     const lengths = args.lengths ?? [2, 8, 20, 25, 30, 38];
