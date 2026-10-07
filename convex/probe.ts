@@ -16,6 +16,7 @@ import { v } from 'convex/values';
 import { internalAction, internalQuery } from './_generated/server';
 import { internal } from './_generated/api';
 import { Descriptions } from '../data/characters';
+import { COUNTERPARTS, VARIANT_FAMILIES } from '../data/variants';
 import { ACTIVITIES } from './constants';
 import { askJev, choice, score, ScoreAnswer } from './util/jev';
 import { askOpenRouter, gemmaModel } from './util/openrouter';
@@ -387,6 +388,143 @@ export const showQuestions = internalQuery({
         ]),
       ),
       importance: { jev: importance, gemma: upstreamImportancePrompt(memory) },
+    };
+  },
+});
+
+// The designed characters of data/variants.ts, one family per call (a family
+// of Gemma's answers takes minutes, and an action has ten): for each
+// character, the accept question from each counterpart, the invite question
+// over the four and no one, and the leave question with each counterpart on
+// small talk cut at `lengths` messages. Under gemma a probability is the share
+// of `samples` answers, the off-list ones counted apart.
+//
+//   npx convex run probe:probeVariants '{"family": "sociability"}'
+//   npx convex run probe:probeVariants '{"family": "sociability", "backend": "gemma", "samples": 10}'
+export const probeVariants = internalAction({
+  args: {
+    family: v.string(),
+    backend: v.optional(v.union(v.literal('jev'), v.literal('gemma'))),
+    samples: v.optional(v.number()),
+    lengths: v.optional(v.array(v.number())),
+  },
+  handler: async (_ctx, args) => {
+    const variants = VARIANT_FAMILIES[args.family];
+    if (!variants) {
+      throw new Error(`no family ${args.family}: ${Object.keys(VARIANT_FAMILIES).join(', ')}`);
+    }
+    const backend = args.backend ?? 'jev';
+    const samples = args.samples ?? 10;
+    const lengths = args.lengths ?? [2, 8, 20, 25, 30, 38];
+    let model: string | undefined;
+    let costUsd = 0;
+    let calls = 0;
+    const providers = new Set<string>();
+    const offList: Array<{ variant: string; decision: string; raw: string }> = [];
+    const ask = async (variant: string, decision: string, q: Question) => {
+      if (backend === 'jev') {
+        const response = await askJev(q.state, { q: choice(q.instructions, q.criteria) });
+        model = response.model;
+        return response.answers.q.probabilities as Record<string, number>;
+      }
+      const options = Object.keys(q.criteria);
+      const counts: Record<string, number> = Object.fromEntries(
+        [...options, OFF_LIST].map((o) => [o, 0]),
+      );
+      const answers = await Promise.all(
+        Array.from({ length: samples }, () =>
+          askOpenRouter(choicePrompt(q), { maxTokens: 24, temperature: 1 }),
+        ),
+      );
+      for (const answer of answers) {
+        calls += 1;
+        costUsd += answer.costUsd ?? 0;
+        model = answer.model;
+        if (answer.provider) {
+          providers.add(answer.provider);
+        }
+        const chosen = matchOption(answer.content, options);
+        if (chosen) {
+          counts[chosen] += 1;
+        } else {
+          counts[OFF_LIST] += 1;
+          offList.push({ variant, decision, raw: answer.content });
+        }
+      }
+      return Object.fromEntries(Object.entries(counts).map(([o, n]) => [o, n / samples]));
+    };
+    const rows: Array<{
+      family: string;
+      variant: string;
+      decision: string;
+      other?: string;
+      messages?: number;
+      probabilities: Record<string, number>;
+    }> = [];
+    for (const d of variants) {
+      const me: Me = { name: d.name, identity: d.identity, goal: d.plan };
+      for (const other of COUNTERPARTS) {
+        const asked = [
+          ask(
+            d.variant,
+            'accept_invite',
+            acceptQuestion(me, { name: other.name, identity: other.identity, lastEnded: null }, 0),
+          ).then((probabilities) =>
+            rows.push({
+              family: args.family,
+              variant: d.variant,
+              decision: 'accept_invite',
+              other: other.name,
+              probabilities,
+            }),
+          ),
+          ...lengths.map((n) =>
+            ask(d.variant, 'leave_conversation', smallTalkQuestion(me, other, n)).then(
+              (probabilities) =>
+                rows.push({
+                  family: args.family,
+                  variant: d.variant,
+                  decision: 'leave_conversation',
+                  other: other.name,
+                  messages: n,
+                  probabilities,
+                }),
+            ),
+          ),
+        ];
+        await Promise.all(asked);
+      }
+      const probabilities = await ask(
+        d.variant,
+        'invite_target',
+        inviteQuestion(
+          me,
+          COUNTERPARTS.map((p) => ({
+            label: p.name,
+            identity: p.identity,
+            distance: 5,
+            lastEnded: null,
+          })),
+          0,
+        ),
+      );
+      rows.push({
+        family: args.family,
+        variant: d.variant,
+        decision: 'invite_target',
+        probabilities,
+      });
+    }
+    return {
+      family: args.family,
+      backend,
+      model,
+      variants,
+      ...(backend === 'gemma'
+        ? { providers: [...providers], samples, calls, costUsd, offList }
+        : {}),
+      lengths,
+      rows,
     };
   },
 });
