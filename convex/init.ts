@@ -1,7 +1,7 @@
 import { v } from 'convex/values';
 import { internal } from './_generated/api';
 import { DatabaseReader, MutationCtx, mutation } from './_generated/server';
-import { Descriptions } from '../data/characters';
+import { townDescriptions } from '../data/interests';
 import * as map from '../data/gentle';
 import { insertInput } from './aiTown/insertInput';
 import { Id } from './_generated/dataModel';
@@ -28,10 +28,12 @@ const init = mutation({
       worldStatus.engineId,
     );
     if (shouldCreate) {
-      const toCreate = args.numAgents !== undefined ? args.numAgents : Descriptions.length;
+      // Upstream's five, or the interest town under TOWN_CAST=interests (D8).
+      const cast = townDescriptions();
+      const toCreate = args.numAgents !== undefined ? args.numAgents : cast.length;
       for (let i = 0; i < toCreate; i++) {
         await insertInput(ctx, worldStatus.worldId, 'createAgent', {
-          descriptionIndex: i % Descriptions.length,
+          descriptionIndex: i % cast.length,
         });
       }
     }

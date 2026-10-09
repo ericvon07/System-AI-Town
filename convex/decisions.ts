@@ -34,7 +34,8 @@
 //                       leave after 8 messages or 10 minutes; the judged
 //                       backends ask, told that conversations here usually
 //                       wrap up after about 25 messages, under a cap of 40,
-//                       agent.ts)
+//                       agent.ts; in the interest town, TOWN_CAST=interests,
+//                       about 20 in the neutral wording, under a cap of 100)
 //   importance          the 0-9 poignancy of a new memory (dice: upstream's
 //                       prompt on the chat LLM; gemma: the same prompt on
 //                       Gemma; jev: a typed Score over the same 0-9 scale)
@@ -49,7 +50,10 @@ import { internal } from './_generated/api';
 import { Id } from './_generated/dataModel';
 import {
   ACTIVITIES,
+  INTEREST_MAX_CONVERSATION_MESSAGES,
+  INTEREST_USUAL_CONVERSATION_MESSAGES,
   INVITE_ACCEPT_PROBABILITY,
+  JUDGED_MAX_CONVERSATION_MESSAGES,
   PLAYER_CONVERSATION_COOLDOWN,
   USUAL_CONVERSATION_MESSAGES,
 } from './constants';
@@ -59,6 +63,7 @@ import { chatCompletion, getLLMConfig } from './util/llm';
 import { distance } from './util/geometry';
 import { SerializedPlayer } from './aiTown/player';
 import { decisionFields } from './decisionFields';
+import { TownCast, townCast } from '../data/interests';
 
 export type DecisionBackend = 'dice' | 'jev' | 'gemma';
 
@@ -70,6 +75,33 @@ export function decisionBackend(): DecisionBackend {
 function jevPolicy(): 'sample' | 'argmax' {
   return process.env.JEV_POLICY === 'argmax' ? 'argmax' : 'sample';
 }
+
+// The leave question's norm and wording, by town: 25 with the clause that
+// people stay longer only when the talk is unusually interesting to them (D4);
+// in the interest town, 20 and the norm alone (D8).
+export type LeaveWording = 'clause' | 'neutral';
+
+export function leaveNorm(cast: TownCast = townCast()): { norm: number; wording: LeaveWording } {
+  return cast === 'interests'
+    ? { norm: INTEREST_USUAL_CONVERSATION_MESSAGES, wording: 'neutral' }
+    : { norm: USUAL_CONVERSATION_MESSAGES, wording: 'clause' };
+}
+
+// The messages after which the code ends a conversation under the judged
+// backends (agent.ts), by town.
+export function conversationCap(cast: TownCast = townCast()): number {
+  return cast === 'interests'
+    ? INTEREST_MAX_CONVERSATION_MESSAGES
+    : JUDGED_MAX_CONVERSATION_MESSAGES;
+}
+
+// The town an arm runs in, which run-arm.sh writes into run.json: the cast,
+// and the norm and the cap the judged backends use (a dice arm leaves by
+// upstream's rule whatever they say).
+export const town = internalQuery({
+  args: {},
+  handler: async () => ({ cast: townCast(), norm: leaveNorm().norm, cap: conversationCap() }),
+});
 
 type DecisionName = 'activity' | 'accept_invite' | 'invite_target' | 'leave_conversation';
 type Probability = { option: string; p: number };
@@ -430,6 +462,7 @@ export function leaveQuestion(
   minutesSoFar: number,
   transcript: Array<{ speaker: string; text: string }>,
   usualMessages: number = USUAL_CONVERSATION_MESSAGES,
+  wording: LeaveWording = 'clause',
 ) {
   return {
     state: {
@@ -446,7 +479,9 @@ export function leaveQuestion(
       "`me.name` is talking with `other.name`, and it is `me.name`'s turn to speak. Does " +
       '`me.name` keep the conversation going, or say goodbye and leave it now? In this ' +
       'town a conversation usually wraps up after about `conversation.usual_length_messages` ' +
-      'messages; people stay longer only when the talk is unusually interesting to them. ' +
+      (wording === 'clause'
+        ? 'messages; people stay longer only when the talk is unusually interesting to them. '
+        : 'messages. ') +
       'Weigh who `me` is (`me.identity`), what they want (`me.goal`), who `other` is ' +
       '(`other.identity`), what has been said so far (`conversation.transcript`) and how ' +
       'long they have been talking (`conversation.messages_so_far` messages over ' +
@@ -679,8 +714,17 @@ export async function decideLeave(
         { option: 'leave', p: 0 },
       ],
     }),
-    async () =>
-      leaveQuestion(me, other, Math.round((now - created) / 6_000) / 10, transcript),
+    async () => {
+      const { norm, wording } = leaveNorm();
+      return leaveQuestion(
+        me,
+        other,
+        Math.round((now - created) / 6_000) / 10,
+        transcript,
+        norm,
+        wording,
+      );
+    },
   );
   return chosen === 'leave';
 }

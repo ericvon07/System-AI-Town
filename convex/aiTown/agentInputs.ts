@@ -5,7 +5,7 @@ import { Conversation, conversationInputs } from './conversation';
 import { movePlayer } from './movement';
 import { inputHandler } from './inputHandler';
 import { point } from '../util/types';
-import { Descriptions } from '../../data/characters';
+import { townDescriptions } from '../../data/interests';
 import { AgentDescription } from './agentDescription';
 import { Agent } from './agent';
 
@@ -171,7 +171,7 @@ export const agentInputs = {
       descriptionIndex: v.number(),
     },
     handler: (game, now, args) => {
-      const description = Descriptions[args.descriptionIndex];
+      const description = townDescriptions()[args.descriptionIndex];
       const playerId = Player.join(
         game,
         now,

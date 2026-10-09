@@ -13,7 +13,6 @@ import {
   MAX_CONVERSATION_DURATION,
   MAX_CONVERSATION_MESSAGES,
   JUDGED_MAX_CONVERSATION_DURATION,
-  JUDGED_MAX_CONVERSATION_MESSAGES,
   MESSAGE_COOLDOWN,
   MIDPOINT_THRESHOLD,
   PLAYER_CONVERSATION_COOLDOWN,
@@ -24,7 +23,7 @@ import { distance } from '../util/geometry';
 import { internal } from '../_generated/api';
 import { movePlayer } from './movement';
 import { insertInput } from './insertInput';
-import { decisionBackend } from '../decisions';
+import { conversationCap, decisionBackend } from '../decisions';
 
 export class Agent {
   id: GameId<'agents'>;
@@ -209,10 +208,11 @@ export class Agent {
         }
         // See if the conversation has been going on too long and decide to leave.
         // Under the judged backends the agent is asked before each reply
-        // (agentGenerateMessage), and this is only the cap above that.
+        // (agentGenerateMessage), and this is only the cap above that: 40
+        // messages, or 100 in the interest town (D8).
         const judged = decisionBackend() !== 'dice';
         const maxDuration = judged ? JUDGED_MAX_CONVERSATION_DURATION : MAX_CONVERSATION_DURATION;
-        const maxMessages = judged ? JUDGED_MAX_CONVERSATION_MESSAGES : MAX_CONVERSATION_MESSAGES;
+        const maxMessages = judged ? conversationCap() : MAX_CONVERSATION_MESSAGES;
         const tooLongDeadline = started + maxDuration;
         if (tooLongDeadline < now || conversation.numMessages > maxMessages) {
           console.log(`${player.id} leaving conversation with ${otherPlayer.id}.`);

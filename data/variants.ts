@@ -24,7 +24,7 @@ export type Variant = { variant: string; name: string; identity: string; plan: s
 const SAM =
   'Sam has lived in town for years, works mornings at the bakery on the square, ' +
   'and spends the afternoons walking around town.';
-const NEUTRAL_GOAL = 'You want to have a good day in town.';
+export const NEUTRAL_GOAL = 'You want to have a good day in town.';
 
 const BOB = Descriptions.find((d) => d.name === 'Bob')!;
 const BOB_AVOIDANCE =

@@ -53,6 +53,14 @@ export const USUAL_CONVERSATION_MESSAGES = 25;
 export const JUDGED_MAX_CONVERSATION_MESSAGES = 40;
 export const JUDGED_MAX_CONVERSATION_DURATION = 30 * 60_000;
 
+// The interest town (deviation D8, the lab's 003-IP), under TOWN_CAST=interests:
+// the leave question names a norm of 20 messages in the neutral wording, without
+// the clause on interesting talk, and the cap rises to 100 messages so that a
+// difference in how long two people want to talk is not cut off at 40. The 30
+// minutes stay.
+export const INTEREST_USUAL_CONVERSATION_MESSAGES = 20;
+export const INTEREST_MAX_CONVERSATION_MESSAGES = 100;
+
 // Wait for 1s after sending an input to the engine. We can remove this
 // once we can await on an input being processed.
 export const INPUT_DELAY = 1000;
