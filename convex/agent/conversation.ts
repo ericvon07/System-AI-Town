@@ -41,10 +41,47 @@ export async function startConversationMessage(
   const memoryWithOtherPlayer = memories.find(
     (m) => m.data.type === 'conversation' && m.data.playerIds.includes(otherPlayerId),
   );
+  const messages = startConversationPrompt(
+    player,
+    otherPlayer,
+    agent,
+    otherAgent ?? null,
+    lastConversation,
+    memories,
+    !!memoryWithOtherPlayer,
+  );
+  const lastPrompt = turnPrompt(player, otherPlayer);
+
+  const { content } = await chatCompletion({
+    messages,
+    max_tokens: 300,
+    stop: stopWords(otherPlayer.name, player.name),
+  });
+  const message = trimContentPrefx(content, lastPrompt);
+  return messagesCapped() ? capWords(message) : message;
+}
+
+// The three prompts, apart from where they are sent, so the lab's
+// probe:showQuestions prints the very messages the chat model reads (003-IP,
+// IT-H). The text is upstream's (with D7's line), unchanged by the move.
+
+function turnPrompt(player: { name: string }, otherPlayer: { name: string }) {
+  return `${player.name} to ${otherPlayer.name}:`;
+}
+
+export function startConversationPrompt(
+  player: { name: string },
+  otherPlayer: { name: string },
+  agent: { identity: string; plan: string } | null,
+  otherAgent: { identity: string; plan: string } | null,
+  lastConversation: { created: number } | null,
+  memories: Array<{ description: string }>,
+  memoryWithOtherPlayer: boolean,
+): LLMMessage[] {
   const prompt = [
     `You are ${player.name}, and you just started a conversation with ${otherPlayer.name}.`,
   ];
-  prompt.push(...agentPrompts(otherPlayer, agent, otherAgent ?? null));
+  prompt.push(...agentPrompts(otherPlayer, agent, otherAgent));
   prompt.push(...previousConversationPrompt(otherPlayer, lastConversation));
   prompt.push(...untrustedMemoryInstructions(memories));
   if (memoryWithOtherPlayer) {
@@ -59,23 +96,71 @@ export async function startConversationMessage(
       `Keep your message under ${MESSAGE_WORDS_USUAL} words; go longer only if you truly need to in order to explain an idea, and never past ${MESSAGE_WORDS_CAP} words.`,
     );
   }
-  const lastPrompt = `${player.name} to ${otherPlayer.name}:`;
-  const messages: LLMMessage[] = [
+  return [
     {
       role: 'system',
       content: prompt.join('\n'),
     },
     ...relatedMemoriesMessages(memories),
-    { role: 'user', content: lastPrompt },
+    { role: 'user', content: turnPrompt(player, otherPlayer) },
   ];
+}
 
-  const { content } = await chatCompletion({
-    messages,
-    max_tokens: 300,
-    stop: stopWords(otherPlayer.name, player.name),
-  });
-  const message = trimContentPrefx(content, lastPrompt);
-  return messagesCapped() ? capWords(message) : message;
+export function continueConversationPrompt(
+  player: { name: string },
+  otherPlayer: { name: string },
+  agent: { identity: string; plan: string } | null,
+  otherAgent: { identity: string; plan: string } | null,
+  memories: Array<{ description: string }>,
+  started: Date,
+  now: number,
+  history: LLMMessage[],
+): LLMMessage[] {
+  const prompt = [
+    `You are ${player.name}, and you're currently in a conversation with ${otherPlayer.name}.`,
+    `The conversation started at ${started.toLocaleString()}. It's now ${now.toLocaleString()}.`,
+  ];
+  prompt.push(...agentPrompts(otherPlayer, agent, otherAgent));
+  prompt.push(...untrustedMemoryInstructions(memories));
+  prompt.push(
+    `Below is the current chat history between you and ${otherPlayer.name}.`,
+    `DO NOT greet them again. Do NOT use the word "Hey" too often. Your response should be brief and within 200 characters.`,
+  );
+  return [
+    {
+      role: 'system',
+      content: prompt.join('\n'),
+    },
+    ...relatedMemoriesMessages(memories),
+    ...history,
+    { role: 'user', content: turnPrompt(player, otherPlayer) },
+  ];
+}
+
+export function leaveConversationPrompt(
+  player: { name: string },
+  otherPlayer: { name: string },
+  agent: { identity: string; plan: string } | null,
+  otherAgent: { identity: string; plan: string } | null,
+  history: LLMMessage[],
+): LLMMessage[] {
+  const prompt = [
+    `You are ${player.name}, and you're currently in a conversation with ${otherPlayer.name}.`,
+    `You've decided to leave the question and would like to politely tell them you're leaving the conversation.`,
+  ];
+  prompt.push(...agentPrompts(otherPlayer, agent, otherAgent));
+  prompt.push(
+    `Below is the current chat history between you and ${otherPlayer.name}.`,
+    `How would you like to tell them that you're leaving? Your response should be brief and within 200 characters.`,
+  );
+  return [
+    {
+      role: 'system',
+      content: prompt.join('\n'),
+    },
+    ...history,
+    { role: 'user', content: turnPrompt(player, otherPlayer) },
+  ];
 }
 
 // D7, under MESSAGE_LENGTH=capped; unset, the messages are upstream's.
@@ -132,33 +217,23 @@ export async function continueConversationMessage(
     `What do you think about ${otherPlayer.name}?`,
   );
   const memories = await memory.searchMemories(ctx, player.id as GameId<'players'>, embedding, 3);
-  const prompt = [
-    `You are ${player.name}, and you're currently in a conversation with ${otherPlayer.name}.`,
-    `The conversation started at ${started.toLocaleString()}. It's now ${now.toLocaleString()}.`,
-  ];
-  prompt.push(...agentPrompts(otherPlayer, agent, otherAgent ?? null));
-  prompt.push(...untrustedMemoryInstructions(memories));
-  prompt.push(
-    `Below is the current chat history between you and ${otherPlayer.name}.`,
-    `DO NOT greet them again. Do NOT use the word "Hey" too often. Your response should be brief and within 200 characters.`,
-  );
-
-  const llmMessages: LLMMessage[] = [
-    {
-      role: 'system',
-      content: prompt.join('\n'),
-    },
-    ...relatedMemoriesMessages(memories),
-    ...(await previousMessages(
+  const llmMessages = continueConversationPrompt(
+    player,
+    otherPlayer,
+    agent,
+    otherAgent ?? null,
+    memories,
+    started,
+    now,
+    await previousMessages(
       ctx,
       worldId,
       player,
       otherPlayer,
       conversation.id as GameId<'conversations'>,
-    )),
-  ];
-  const lastPrompt = `${player.name} to ${otherPlayer.name}:`;
-  llmMessages.push({ role: 'user', content: lastPrompt });
+    ),
+  );
+  const lastPrompt = turnPrompt(player, otherPlayer);
 
   const { content } = await chatCompletion({
     messages: llmMessages,
@@ -185,30 +260,20 @@ export async function leaveConversationMessage(
       conversationId,
     },
   );
-  const prompt = [
-    `You are ${player.name}, and you're currently in a conversation with ${otherPlayer.name}.`,
-    `You've decided to leave the question and would like to politely tell them you're leaving the conversation.`,
-  ];
-  prompt.push(...agentPrompts(otherPlayer, agent, otherAgent ?? null));
-  prompt.push(
-    `Below is the current chat history between you and ${otherPlayer.name}.`,
-    `How would you like to tell them that you're leaving? Your response should be brief and within 200 characters.`,
-  );
-  const llmMessages: LLMMessage[] = [
-    {
-      role: 'system',
-      content: prompt.join('\n'),
-    },
-    ...(await previousMessages(
+  const llmMessages = leaveConversationPrompt(
+    player,
+    otherPlayer,
+    agent,
+    otherAgent ?? null,
+    await previousMessages(
       ctx,
       worldId,
       player,
       otherPlayer,
       conversation.id as GameId<'conversations'>,
-    )),
-  ];
-  const lastPrompt = `${player.name} to ${otherPlayer.name}:`;
-  llmMessages.push({ role: 'user', content: lastPrompt });
+    ),
+  );
+  const lastPrompt = turnPrompt(player, otherPlayer);
 
   const { content } = await chatCompletion({
     messages: llmMessages,
@@ -285,9 +350,18 @@ async function previousMessages(
   otherPlayer: { id: string; name: string },
   conversationId: GameId<'conversations'>,
 ) {
-  const llmMessages: LLMMessage[] = [];
   const prevMessages = await ctx.runQuery(api.messages.listMessages, { worldId, conversationId });
-  for (const message of prevMessages) {
+  return historyMessages(player, otherPlayer, prevMessages);
+}
+
+// The chat history as the continue and leave prompts carry it.
+export function historyMessages(
+  player: { id: string; name: string },
+  otherPlayer: { id: string; name: string },
+  messages: Array<{ author: string; text: string }>,
+): LLMMessage[] {
+  const llmMessages: LLMMessage[] = [];
+  for (const message of messages) {
     const author = message.author === player.id ? player : otherPlayer;
     const recipient = message.author === player.id ? otherPlayer : player;
     llmMessages.push({
