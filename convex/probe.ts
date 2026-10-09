@@ -585,6 +585,24 @@ export const showQuestions = internalQuery({
               ),
               pair: { me: me.name, other: other.name, level: level(me.name, other.name, dealing) },
               talks,
+              // The pastime each talk of IT-J is about, for every ordered pair: what
+              // probeInterests asks, so the page shows it rather than rebuilding it.
+              talkPastimes: Object.fromEntries(
+                people.map((a) => [
+                  a.name,
+                  Object.fromEntries(
+                    people
+                      .filter((b) => b.name !== a.name)
+                      .map((b) => [
+                        b.name,
+                        {
+                          both: talkPastime(a, b, 'both', dealing) ?? null,
+                          'other only': talkPastime(a, b, 'other only', dealing) ?? null,
+                        },
+                      ]),
+                  ),
+                ]),
+              ),
             },
           }
         : {}),
