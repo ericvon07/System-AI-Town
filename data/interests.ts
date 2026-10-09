@@ -15,6 +15,13 @@
 // different domains, so two lists that share nothing are not near each other
 // either; they are dealt to the pairs by a fixed seed, and each list is put in
 // its own shuffled order, so the shared ones are not always first.
+//
+// Two dealings (003-IP, IT-I), picked by INTEREST_DEALING (1, the default, or
+// 2): the same six names, texts and eighteen pastimes, but in the second every
+// name takes another row of the first's table -- one of the 24 permutations
+// under which no pair keeps its level -- and the pastimes are dealt again by
+// another seed, none falling to the pair it had. So a level rests on six pairs
+// across the two worlds, tied to no one set of pastimes and no one pair of names.
 
 import { Descriptions } from './characters';
 import { NEUTRAL_GOAL } from './variants';
@@ -23,6 +30,12 @@ export type TownCast = 'upstream' | 'interests';
 
 export function townCast(): TownCast {
   return process.env.TOWN_CAST === 'interests' ? 'interests' : 'upstream';
+}
+
+export type Dealing = 1 | 2;
+
+export function interestDealing(): Dealing {
+  return process.env.INTEREST_DEALING === '2' ? 2 : 1;
 }
 
 export type TownPerson = { name: string; character: string; identity: string; plan: string };
@@ -51,35 +64,67 @@ export const PASTIMES = [
   'stamp collecting',
 ];
 
-// The pairs at each level: how many pastimes the two have in their lists.
-export const MATCHINGS: Array<{ level: number; pairs: Array<[string, string]> }> = [
-  {
-    level: 3,
-    pairs: [
-      ['Avery', 'Blair'],
-      ['Laura', 'Drew'],
-      ['Emery', 'Frankie'],
-    ],
-  },
-  {
-    level: 2,
-    pairs: [
-      ['Avery', 'Laura'],
-      ['Blair', 'Emery'],
-      ['Drew', 'Frankie'],
-    ],
-  },
-  {
-    level: 1,
-    pairs: [
-      ['Avery', 'Drew'],
-      ['Blair', 'Frankie'],
-      ['Laura', 'Emery'],
-    ],
-  },
-];
+// The pairs at each level, by dealing: how many pastimes the two have in their
+// lists. In the second, Avery, Blair, Laura, Drew, Emery and Frankie take the
+// first's rows of Avery, Emery, Frankie, Laura, Drew and Blair.
+type Matchings = Array<{ level: number; pairs: Array<[string, string]> }>;
 
-export const SEED = 20261008;
+export const MATCHINGS: Record<Dealing, Matchings> = {
+  1: [
+    {
+      level: 3,
+      pairs: [
+        ['Avery', 'Blair'],
+        ['Laura', 'Drew'],
+        ['Emery', 'Frankie'],
+      ],
+    },
+    {
+      level: 2,
+      pairs: [
+        ['Avery', 'Laura'],
+        ['Blair', 'Emery'],
+        ['Drew', 'Frankie'],
+      ],
+    },
+    {
+      level: 1,
+      pairs: [
+        ['Avery', 'Drew'],
+        ['Blair', 'Frankie'],
+        ['Laura', 'Emery'],
+      ],
+    },
+  ],
+  2: [
+    {
+      level: 3,
+      pairs: [
+        ['Avery', 'Frankie'],
+        ['Blair', 'Laura'],
+        ['Drew', 'Emery'],
+      ],
+    },
+    {
+      level: 2,
+      pairs: [
+        ['Avery', 'Drew'],
+        ['Blair', 'Frankie'],
+        ['Laura', 'Emery'],
+      ],
+    },
+    {
+      level: 1,
+      pairs: [
+        ['Avery', 'Emery'],
+        ['Blair', 'Drew'],
+        ['Laura', 'Frankie'],
+      ],
+    },
+  ],
+};
+
+export const SEEDS: Record<Dealing, number> = { 1: 20261008, 2: 20261009 };
 
 // mulberry32: a small seeded generator, so the deal is the same on every run.
 function seeded(seed: number) {
@@ -104,12 +149,12 @@ export function shuffled<T>(items: T[], random: () => number): T[] {
 
 // The deal: the pool shuffled once, then handed out in order, three to each
 // pair at level 3, two at level 2, one at level 1; then each list shuffled.
-function deal(): Record<string, string[]> {
-  const random = seeded(SEED);
+function deal(dealing: Dealing): Record<string, string[]> {
+  const random = seeded(SEEDS[dealing]);
   const pool = shuffled(PASTIMES, random);
   const lists: Record<string, string[]> = Object.fromEntries(NAMES.map((n) => [n, []]));
   let next = 0;
-  for (const { level, pairs } of MATCHINGS) {
+  for (const { level, pairs } of MATCHINGS[dealing]) {
     for (const [a, b] of pairs) {
       const dealt = pool.slice(next, next + level);
       next += level;
@@ -123,29 +168,31 @@ function deal(): Record<string, string[]> {
   return lists;
 }
 
-export const PASTIMES_OF = deal();
+export const PASTIMES_OF: Record<Dealing, Record<string, string[]>> = { 1: deal(1), 2: deal(2) };
 
 // How many pastimes two people of the town have in both their lists, 0 to 3.
-export function level(a: string, b: string): number {
-  return PASTIMES_OF[a].filter((p) => PASTIMES_OF[b].includes(p)).length;
+export function level(a: string, b: string, dealing: Dealing = interestDealing()): number {
+  return PASTIMES_OF[dealing][a].filter((p) => PASTIMES_OF[dealing][b].includes(p)).length;
 }
 
 function listed(items: string[]) {
   return `${items.slice(0, -1).join(', ')} and ${items[items.length - 1]}`;
 }
 
-export const INTEREST_DESCRIPTIONS: TownPerson[] = NAMES.map((name, i) => ({
-  name,
-  character: SPRITES[i],
-  identity:
-    `${name} has lived in town for years and spends the afternoons walking around town. ` +
-    `${name} neither seeks out company nor avoids it. ` +
-    `In free time, ${name} enjoys ${listed(PASTIMES_OF[name])}.`,
-  plan: NEUTRAL_GOAL,
-}));
+export function interestDescriptions(dealing: Dealing): TownPerson[] {
+  return NAMES.map((name, i) => ({
+    name,
+    character: SPRITES[i],
+    identity:
+      `${name} has lived in town for years and spends the afternoons walking around town. ` +
+      `${name} neither seeks out company nor avoids it. ` +
+      `In free time, ${name} enjoys ${listed(PASTIMES_OF[dealing][name])}.`,
+    plan: NEUTRAL_GOAL,
+  }));
+}
 
-// The people `init` creates: the interest town under TOWN_CAST=interests,
-// otherwise upstream's five.
+// The people `init` creates: the interest town under TOWN_CAST=interests, in
+// the dealing INTEREST_DEALING names, otherwise upstream's five.
 export function townDescriptions(): TownPerson[] {
-  return townCast() === 'interests' ? INTEREST_DESCRIPTIONS : Descriptions;
+  return townCast() === 'interests' ? interestDescriptions(interestDealing()) : Descriptions;
 }

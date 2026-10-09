@@ -19,7 +19,7 @@
 set -euo pipefail
 arm=${1:?usage: run-arm.sh dice|jev|gemma [minutes]}
 minutes=${2:-25}
-cap=${SPEND_CAP_USD:-1.00}
+spend_cap=${SPEND_CAP_USD:-1.00}
 runs_local=${RUNS_LOCAL:-$(cd "$(dirname "$0")/../.." && pwd)/runs-local}
 case "$arm" in dice | jev | gemma) ;; *) echo "arm must be dice, jev or gemma" >&2; exit 2 ;; esac
 cd "$(dirname "$0")/.."
@@ -50,11 +50,13 @@ else
   chat_model=${chat_model:-llama3}
 fi
 message_length=$(cx env get MESSAGE_LENGTH 2>/dev/null || true)
-# The town (D8): the cast TOWN_CAST names, and the leave norm and the cap the
-# judged backends use in it, as the code reports them.
-read -r cast norm cap < <(cx run decisions:town |
-  python3 -c 'import sys, json; t = json.load(sys.stdin); print(t["cast"], t["norm"], t["cap"])')
-[ -n "${cap:-}" ] || { echo "decisions:town did not answer: is this code deployed?" >&2; exit 1; }
+# The town (D8): the cast TOWN_CAST names, its dealing (INTEREST_DEALING, in
+# the interest town only), and the leave norm and the message cap the judged
+# backends use in it, as the code reports them. The message cap is not the
+# spend cap above.
+read -r cast dealing norm message_cap < <(cx run decisions:town |
+  python3 -c 'import sys, json; t = json.load(sys.stdin); print(t["cast"], json.dumps(t.get("dealing")), t["norm"], t["cap"])')
+[ -n "${message_cap:-}" ] || { echo "decisions:town did not answer: is this code deployed?" >&2; exit 1; }
 cx run init >/dev/null
 world=$(cx run world:defaultWorldStatus | python3 -c 'import sys, json; print(json.load(sys.stdin)["worldId"])')
 start=$(date '+%F %T')
@@ -62,7 +64,7 @@ start=$(date '+%F %T')
 # ones (a new module that ran but was never committed). Read at the start.
 code=$(git rev-parse --short HEAD)$([ -z "$(git status --porcelain)" ] || echo -dirty)
 spent0=$(spent)
-echo "arm=$arm chat=${chat:-ollama} cast=$cast world=$world start=$start openrouter_usage=${spent0:-n/a}"
+echo "arm=$arm chat=${chat:-ollama} cast=$cast dealing=$dealing world=$world start=$start openrouter_usage=${spent0:-n/a} spend_cap=\$$spend_cap"
 
 end=$(($(date +%s) + minutes * 60))
 while [ "$(date +%s)" -lt "$end" ]; do
@@ -70,8 +72,8 @@ while [ "$(date +%s)" -lt "$end" ]; do
   sleep 30
   if [ -n "$spent0" ]; then
     now=$(spent)
-    if [ -n "$now" ] && python3 -c "import sys; sys.exit(0 if $now - $spent0 >= $cap else 1)"; then
-      echo "spend cap reached: \$$(python3 -c "print(round($now - $spent0, 4))") >= \$$cap, stopping early"
+    if [ -n "$now" ] && python3 -c "import sys; sys.exit(0 if $now - $spent0 >= $spend_cap else 1)"; then
+      echo "spend cap reached: \$$(python3 -c "print(round($now - $spent0, 4))") >= \$$spend_cap, stopping early"
       break
     fi
   fi
@@ -93,7 +95,8 @@ cx data decisions --limit 10000 --format jsonLines 2>/dev/null |
     >"$out/decisions.jsonl"
 cat >"$out/run.json" <<JSON
 {"arm": "$arm", "chat_backend": "${chat:-ollama}", "chat_model": "$chat_model",
- "message_length": "${message_length:-upstream}", "cast": "$cast", "norm": $norm, "cap": $cap,
+ "message_length": "${message_length:-upstream}", "cast": "$cast", "dealing": $dealing,
+ "norm": $norm, "cap": $message_cap, "spend_cap_usd": $spend_cap,
  "world": "$world", "start": "$start",
  "end": "$(date '+%F %T')", "minutes": $minutes, "code": "$code",
  "openrouter_usage_start": ${spent0:-null}, "openrouter_usage_end": ${spent1:-null}}

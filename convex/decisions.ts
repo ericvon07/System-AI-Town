@@ -63,7 +63,7 @@ import { chatCompletion, getLLMConfig } from './util/llm';
 import { distance } from './util/geometry';
 import { SerializedPlayer } from './aiTown/player';
 import { decisionFields } from './decisionFields';
-import { TownCast, shuffled, townCast } from '../data/interests';
+import { TownCast, interestDealing, shuffled, townCast } from '../data/interests';
 
 export type DecisionBackend = 'dice' | 'jev' | 'gemma';
 
@@ -96,11 +96,17 @@ export function conversationCap(cast: TownCast = townCast()): number {
 }
 
 // The town an arm runs in, which run-arm.sh writes into run.json: the cast,
-// and the norm and the cap the judged backends use (a dice arm leaves by
-// upstream's rule whatever they say).
+// its dealing in the interest town (INTEREST_DEALING, 003-IP's IT-I; null
+// outside it), and the norm and the cap the judged backends use (a dice arm
+// leaves by upstream's rule whatever they say).
 export const town = internalQuery({
   args: {},
-  handler: async () => ({ cast: townCast(), norm: leaveNorm().norm, cap: conversationCap() }),
+  handler: async () => ({
+    cast: townCast(),
+    dealing: townCast() === 'interests' ? interestDealing() : null,
+    norm: leaveNorm().norm,
+    cap: conversationCap(),
+  }),
 });
 
 type DecisionName = 'activity' | 'accept_invite' | 'invite_target' | 'leave_conversation';

@@ -18,12 +18,14 @@ import { internal } from './_generated/api';
 import { Descriptions } from '../data/characters';
 import { COUNTERPARTS, VARIANT_FAMILIES } from '../data/variants';
 import {
-  INTEREST_DESCRIPTIONS,
+  Dealing,
   NAMES,
   PASTIMES,
   PASTIMES_OF,
-  SEED,
+  SEEDS,
   TownCast,
+  interestDealing,
+  interestDescriptions,
   level,
   townCast,
 } from '../data/interests';
@@ -292,13 +294,56 @@ function smallTalkQuestion(me: Me, other: Me, n: number, norm?: number, wording?
   return leaveQuestion(me, other, Math.round(n * 0.35 * 10) / 10, transcript, norm, wording);
 }
 
-// The people of a town, as the questions read them.
-function peopleOf(cast: TownCast): Me[] {
-  return (cast === 'interests' ? INTEREST_DESCRIPTIONS : Descriptions).map((d) => ({
+// The people of a town, as the questions read them; the interest town in the
+// dealing given, or the deployment's (INTEREST_DEALING).
+function peopleOf(cast: TownCast, dealing: Dealing = interestDealing()): Me[] {
+  return (cast === 'interests' ? interestDescriptions(dealing) : Descriptions).map((d) => ({
     name: d.name,
     identity: d.identity,
     goal: d.plan,
   }));
+}
+
+// The interest town's talks about a pastime (003-IP, IT-J): `other` speaks of
+// one of their pastimes and `me` answers with the same neutral lines, four
+// lines repeating as the small talk does. The two talks of a pair differ in the
+// pastime's name alone: one both list ('both'), or one only `other` lists
+// ('other only'), the first of `other`'s list, in its fixed order, that fits.
+// What differs is whether `me`'s own identity lists it. Like every text the lab
+// writes for this town, no line holds interest, interested, interesting,
+// share, shared, common or similar.
+export type Talk = 'small' | 'both' | 'other only';
+
+function talkLines(pastime: string) {
+  return [
+    `I spent a few hours on ${pastime} again today.`,
+    'Oh? How did it go?',
+    `Well. I always lose track of time with ${pastime}.`,
+    'I can see why.',
+  ];
+}
+
+function talkPastime(me: Me, other: Me, talk: 'both' | 'other only', dealing: Dealing) {
+  const mine = PASTIMES_OF[dealing][me.name];
+  return PASTIMES_OF[dealing][other.name].find((p) =>
+    talk === 'both' ? mine.includes(p) : !mine.includes(p),
+  );
+}
+
+function pastimeTalkQuestion(
+  me: Me,
+  other: Me,
+  pastime: string,
+  n: number,
+  norm?: number,
+  wording?: LeaveWording,
+) {
+  const lines = talkLines(pastime);
+  const transcript = Array.from({ length: n }, (_, i) => ({
+    speaker: i % 2 === 0 ? other.name : me.name,
+    text: lines[i % lines.length],
+  }));
+  return leaveQuestion(me, other, Math.round(n * 0.35 * 10) / 10, transcript, norm, wording);
 }
 
 // The three prompts of a conversation between `me` and `other` as the chat
@@ -432,25 +477,30 @@ export const probeLeave = internalAction({
 // conversation between the two as the chat model receives them.
 //
 // The town is the deployment's (TOWN_CAST) unless `cast` names one. In the
-// interest town (003-IP) the default pair is Avery and Blair, who share three
-// pastimes; `town` adds the six, the pastimes dealt and how many each pair
-// shares; and the leave question comes in both wordings, the town's neutral
-// one and, for the probe only, the one with the five-person town's clause.
+// interest town (003-IP) the dealing is the deployment's (INTEREST_DEALING)
+// unless `dealing` names one, and the default pair is Avery and their partner
+// at level 3; `town` adds the six, the pastimes dealt and how many each pair
+// shares; the leave question comes in both wordings, the town's neutral one
+// and, for the probe only, the one with the five-person town's clause; and,
+// for the probe only, over the two talks about a pastime (IT-J) -- one both
+// list (when the pair has one) and one only `other` lists.
 //
 //   npx convex run probe:showQuestions '{"name": "Bob"}'
-//   npx convex run probe:showQuestions '{"cast": "interests", "name": "Avery", "other": "Blair"}'
+//   npx convex run probe:showQuestions '{"cast": "interests", "dealing": 2, "name": "Avery"}'
 export const showQuestions = internalQuery({
   args: {
     name: v.optional(v.string()),
     other: v.optional(v.string()),
     distance: v.optional(v.number()),
     cast: v.optional(v.union(v.literal('upstream'), v.literal('interests'))),
+    dealing: v.optional(v.union(v.literal(1), v.literal(2))),
   },
   handler: async (_ctx, args) => {
     const distance = args.distance ?? 5;
     const cast = args.cast ?? townCast();
     const interests = cast === 'interests';
-    const people = peopleOf(cast);
+    const dealing: Dealing = args.dealing ?? interestDealing();
+    const people = peopleOf(cast, dealing);
     const me = people.find((p) => p.name === (args.name ?? (interests ? 'Avery' : 'Bob')));
     if (!me) {
       throw new Error(`no persona named ${args.name}`);
@@ -459,7 +509,7 @@ export const showQuestions = internalQuery({
     const other = args.other
       ? others.find((p) => p.name === args.other)
       : interests
-        ? others.find((p) => level(me.name, p.name) === 3)
+        ? others.find((p) => level(me.name, p.name, dealing) === 3)
         : others[0];
     if (!other) {
       throw new Error(`no other persona named ${args.other}`);
@@ -485,6 +535,24 @@ export const showQuestions = internalQuery({
         ? { leave_conversation_clause: smallTalkQuestion(me, other, 8, norm, 'clause') }
         : {}),
     };
+    const talks: Record<string, string | undefined> = interests
+      ? {
+          both: talkPastime(me, other, 'both', dealing),
+          'other only': talkPastime(me, other, 'other only', dealing),
+        }
+      : {};
+    for (const [talk, pastime] of Object.entries(talks)) {
+      if (pastime) {
+        questions[`leave_conversation_talk_${talk.replace(' ', '_')}`] = pastimeTalkQuestion(
+          me,
+          other,
+          pastime,
+          8,
+          norm,
+          wording,
+        );
+      }
+    }
     const memory = `${me.name} talked with ${other.name} about the weather.`;
     const importance = importanceQuestion(memory);
     return {
@@ -498,21 +566,25 @@ export const showQuestions = internalQuery({
       ...(interests
         ? {
             town: {
-              seed: SEED,
+              dealing,
+              seed: SEEDS[dealing],
               pastimes: PASTIMES,
-              people: INTEREST_DESCRIPTIONS.map((d) => ({
+              people: interestDescriptions(dealing).map((d) => ({
                 name: d.name,
                 identity: d.identity,
                 goal: d.plan,
-                pastimes: PASTIMES_OF[d.name],
+                pastimes: PASTIMES_OF[dealing][d.name],
               })),
               overlap: Object.fromEntries(
                 NAMES.map((a) => [
                   a,
-                  Object.fromEntries(NAMES.filter((b) => b !== a).map((b) => [b, level(a, b)])),
+                  Object.fromEntries(
+                    NAMES.filter((b) => b !== a).map((b) => [b, level(a, b, dealing)]),
+                  ),
                 ]),
               ),
-              pair: { me: me.name, other: other.name, level: level(me.name, other.name) },
+              pair: { me: me.name, other: other.name, level: level(me.name, other.name, dealing) },
+              talks,
             },
           }
         : {}),
@@ -720,38 +792,51 @@ function judgeOf(backend: 'jev' | 'gemma', samples: number) {
   return { ask, tally };
 }
 
-// The interest town's paired probe (003-IP, IT-D), on the six of
-// data/interests.ts, everyone a stranger: for each person, the accept question
-// from each of the five others; the invite question over the five at
-// `distance` tiles and no one, asked with the five in the town's order and
-// reversed, so that no level is always listed first or last; and the leave
-// question with each of the five over the small talk above cut at `lengths`
-// messages, under both wordings with the norm of 20 -- the neutral one the
-// town asks, and the one with the five-person town's clause. With the talk
-// held fixed, a difference by level is the texts alone; the difference between
-// the wordings is what the clause adds. Every row carries the pair's level.
+// The interest town's paired probe (003-IP, IT-D and IT-J), on the six of
+// data/interests.ts in `dealing` (1 or 2, IT-I), everyone a stranger. The
+// grid: for each person, the accept question from each of the five others;
+// the invite question over the five at `distance` tiles and no one, asked
+// with the five in the town's order and reversed, so that no level is always
+// listed first or last; and the leave question with each of the five over the
+// small talk above cut at `lengths` messages. The talks: the leave question
+// with each of the five over the two talks about a pastime -- one both list,
+// when the pair has one, and one only the other lists -- cut at `talkLengths`
+// messages. Every leave question under both wordings with the norm of 20: the
+// neutral one the town asks, and the one with the five-person town's clause.
+// With the talk held fixed, a difference by level is the texts alone; the
+// difference between the wordings is what the clause adds; the difference
+// between the two talks is the judge connecting what is said to who `me` is.
+// Every row carries the pair's level and its talk.
 //
-//   npx convex run probe:probeInterests                                  Jev, all six
-//   npx convex run probe:probeInterests '{"backend": "gemma", "only": ["Avery"]}'
+//   npx convex run probe:probeInterests '{"dealing": 2}'                     Jev, all six
+//   npx convex run probe:probeInterests '{"backend": "gemma", "only": ["Avery"], "part": "talks"}'
 //
-// A call has about five minutes: under gemma, one person per call, and the
-// six are joined afterwards.
+// A call has about five minutes: under gemma, one person and one `part`
+// (grid or talks) per call, and the pieces are joined afterwards.
 export const probeInterests = internalAction({
   args: {
     only: v.optional(v.array(v.string())),
     backend: v.optional(v.union(v.literal('jev'), v.literal('gemma'))),
+    dealing: v.optional(v.union(v.literal(1), v.literal(2))),
+    part: v.optional(v.union(v.literal('grid'), v.literal('talks'), v.literal('all'))),
     samples: v.optional(v.number()),
     lengths: v.optional(v.array(v.number())),
+    talkLengths: v.optional(v.array(v.number())),
     distance: v.optional(v.number()),
   },
   handler: async (_ctx, args) => {
     const backend = args.backend ?? 'jev';
+    const dealing: Dealing = args.dealing ?? 1;
+    const part = args.part ?? 'all';
+    const grid = part !== 'talks';
+    const talks = part !== 'grid';
     const samples = args.samples ?? 10;
     const lengths = args.lengths ?? [2, 10, 20, 30, 45, 60, 80];
+    const talkLengths = args.talkLengths ?? [10, 20, 30];
     const distance = args.distance ?? 5;
     const { norm } = leaveNorm('interests');
     const wordings: LeaveWording[] = ['neutral', 'clause'];
-    const people = peopleOf('interests');
+    const people = peopleOf('interests', dealing);
     const judge = judgeOf(backend, samples);
     const rows: Array<{
       name: string;
@@ -759,6 +844,8 @@ export const probeInterests = internalAction({
       other?: string;
       level?: number;
       wording?: LeaveWording;
+      talk?: Talk;
+      pastime?: string;
       messages?: number;
       order?: string;
       levels?: Record<string, number>;
@@ -767,10 +854,17 @@ export const probeInterests = internalAction({
     for (const me of people.filter((p) => !args.only || args.only.includes(p.name))) {
       const others = people.filter((p) => p.name !== me.name);
       for (const other of others) {
-        const pair = { name: me.name, other: other.name, level: level(me.name, other.name) };
+        const pair = {
+          name: me.name,
+          other: other.name,
+          level: level(me.name, other.name, dealing),
+        };
+        const pastimes = (['both', 'other only'] as const)
+          .map((talk) => ({ talk, pastime: talkPastime(me, other, talk, dealing) }))
+          .filter((t): t is { talk: 'both' | 'other only'; pastime: string } => !!t.pastime);
         for (const wording of wordings) {
           await Promise.all([
-            ...(wording === wordings[0]
+            ...(grid && wording === wordings[0]
               ? [
                   judge
                     .ask(
@@ -787,7 +881,7 @@ export const probeInterests = internalAction({
                     ),
                 ]
               : []),
-            ...lengths.map((n) =>
+            ...(grid ? lengths : []).map((n) =>
               judge
                 .ask(me.name, 'leave_conversation', smallTalkQuestion(me, other, n, norm, wording))
                 .then((probabilities) =>
@@ -795,38 +889,66 @@ export const probeInterests = internalAction({
                     ...pair,
                     decision: 'leave_conversation',
                     wording,
+                    talk: 'small',
                     messages: n,
                     probabilities,
                   }),
                 ),
             ),
+            ...(talks ? pastimes : []).flatMap(({ talk, pastime }) =>
+              talkLengths.map((n) =>
+                judge
+                  .ask(
+                    me.name,
+                    'leave_conversation',
+                    pastimeTalkQuestion(me, other, pastime, n, norm, wording),
+                  )
+                  .then((probabilities) =>
+                    rows.push({
+                      ...pair,
+                      decision: 'leave_conversation',
+                      wording,
+                      talk,
+                      pastime,
+                      messages: n,
+                      probabilities,
+                    }),
+                  ),
+              ),
+            ),
           ]);
         }
       }
-      const levels = Object.fromEntries(others.map((p) => [p.name, level(me.name, p.name)]));
-      for (const order of ['as listed', 'reversed']) {
-        const listed = order === 'reversed' ? [...others].reverse() : others;
-        const probabilities = await judge.ask(
-          me.name,
-          'invite_target',
-          inviteQuestion(
-            me,
-            listed.map((p) => ({ label: p.name, identity: p.identity, distance, lastEnded: null })),
-            0,
-          ),
+      if (grid) {
+        const levels = Object.fromEntries(
+          others.map((p) => [p.name, level(me.name, p.name, dealing)]),
         );
-        rows.push({ name: me.name, decision: 'invite_target', order, levels, probabilities });
+        for (const order of ['as listed', 'reversed']) {
+          const listed = order === 'reversed' ? [...others].reverse() : others;
+          const probabilities = await judge.ask(
+            me.name,
+            'invite_target',
+            inviteQuestion(
+              me,
+              listed.map((p) => ({ label: p.name, identity: p.identity, distance, lastEnded: null })),
+              0,
+            ),
+          );
+          rows.push({ name: me.name, decision: 'invite_target', order, levels, probabilities });
+        }
       }
     }
     return {
       backend,
       ...judge.tally(),
-      town: { cast: 'interests', seed: SEED, pastimes: PASTIMES_OF },
+      town: { cast: 'interests', dealing, seed: SEEDS[dealing], pastimes: PASTIMES_OF[dealing] },
       only: args.only ?? null,
+      part,
       distance,
       norm,
       wordings,
-      lengths,
+      lengths: grid ? lengths : [],
+      talkLengths: talks ? talkLengths : [],
       rows,
     };
   },
