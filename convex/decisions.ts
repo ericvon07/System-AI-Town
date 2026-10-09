@@ -63,7 +63,7 @@ import { chatCompletion, getLLMConfig } from './util/llm';
 import { distance } from './util/geometry';
 import { SerializedPlayer } from './aiTown/player';
 import { decisionFields } from './decisionFields';
-import { TownCast, townCast } from '../data/interests';
+import { TownCast, shuffled, townCast } from '../data/interests';
 
 export type DecisionBackend = 'dice' | 'jev' | 'gemma';
 
@@ -628,7 +628,13 @@ export async function decideInviteTarget(
   });
   const byLabel = new Map(labelled.map((c) => [c.label, c]));
   const backend = decisionBackend();
-  const options = labelled.map((c) => c.label).concat(backend === 'dice' ? [] : [NO_ONE]);
+  // In the interest town (D8) the judged backends are asked about the free
+  // people in a random order: Jev leans toward the last name listed (the lab's
+  // probeInterests), and the town's own order, by creation, would mix that
+  // pull with how much a pair has in common. The state records the order.
+  const asked =
+    backend !== 'dice' && townCast() === 'interests' ? shuffled(labelled, Math.random) : labelled;
+  const options = asked.map((c) => c.label).concat(backend === 'dice' ? [] : [NO_ONE]);
 
   let diceInvitee: string | undefined;
   if (backend === 'dice') {
@@ -656,7 +662,7 @@ export async function decideInviteTarget(
     async () =>
       inviteQuestion(
         me,
-        labelled.map((c) => ({
+        asked.map((c) => ({
           label: c.label,
           identity: c.identity,
           distance: Math.round(
