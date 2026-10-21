@@ -1,3 +1,69 @@
+# AI Town, with five of its decisions made by a judgment
+
+**This is a fork of [a16z-infra/ai-town](https://github.com/a16z-infra/ai-town).** The original
+README follows, unchanged, below the line.
+
+Upstream AI Town makes several of a character's choices without reading who the character is:
+a die picks what to do when idle and whether to accept an invitation, the first free player is
+the one invited, and a conversation ends after a fixed number of messages. This fork puts five
+decisions behind one setting, `DECISION_BACKEND`, so they can be made by
+[Jev](https://typesafe.ai), TypeSafe's decision model, which returns probabilities over the
+options, or by Gemma 4 31B through OpenRouter, asked the same questions as a prompt. Unset, the
+town decides as published and only records its decisions.
+
+## What changed
+
+| Decision | Upstream | `jev` and `gemma` |
+|---|---|---|
+| What to do when idle | each of the three activities with probability 1/3 | a choice among the same three |
+| Accept an invitation | yes with probability 0.8, for everyone | accept or decline |
+| Whom to invite | the first free player | a choice among the free players, plus "no one" |
+| Leave a conversation | after 8 messages or 10 minutes | continue or leave, told conversations usually last about 25 messages, with a cap of 40 messages or 30 minutes |
+| Importance of a memory | a digit from 0 to 9 written by the chat model | Jev: a score over the same ten levels. Gemma: upstream's prompt |
+
+Both backends read the same state, built from the texts the conversation prompts already use
+(`data/characters.ts`). The questions are in `convex/decisions.ts`; Jev's client is
+`convex/util/jev.ts` and the OpenRouter client `convex/util/openrouter.ts`. Every decision,
+with its options, probabilities and the act taken, is a row in the `decisions` table, which
+survives `testing:wipeAllTables`.
+
+Further settings, all unset by default:
+
+- `JEV_POLICY=argmax` takes Jev's most likely option instead of sampling from its
+  probabilities.
+- `CHAT_BACKEND=openrouter` writes the conversations with Gemma instead of Ollama.
+- `MESSAGE_LENGTH=capped` asks for messages of about 50 words and cuts them at 100.
+- `TOWN_CAST=interests` creates the six-person town of `data/interests.ts`, whose descriptions
+  differ only in their names and pastimes. There, the leave question names a norm of 20
+  messages, the cap rises to 100 messages, and the people one may invite are listed in a
+  random order.
+
+`convex/probe.ts` asks the same questions over constructed states, outside a running town
+(`npx convex run probe:showQuestions` prints them). `data/variants.ts` holds characters that
+differ in one sentence. `results/` holds the traces and readouts of the first runs, on
+October 3 and 4, 2026.
+
+## Running it
+
+Set up the town as described in the README below, then set the keys in the Convex
+environment and run one condition on a fresh world:
+
+```sh
+npx convex env set TYPESAFE_API_KEY <key>     # for jev
+npx convex env set OPENROUTER_API_KEY <key>   # for gemma, and for CHAT_BACKEND=openrouter
+npx convex dev                                # in its own terminal
+scripts/run-arm.sh jev 25                     # dice | jev | gemma, then minutes
+```
+
+`scripts/run-arm.sh` wipes the world, sets the backend, keeps the world running for the given
+minutes, and exports what the next wipe would delete. `SPEND_CAP_USD` (default 1.00) stops it
+early, and `RUNS_LOCAL` names the export folder.
+
+This fork was developed in a private repository and published here on 2026-10-20 with its full
+commit history. Commit hashes differ from that private copy.
+
+---
+
 # AI Town 🏠💻💌
 
 [Live Demo](https://www.convex.dev/ai-town)
