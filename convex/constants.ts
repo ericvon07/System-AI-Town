@@ -53,7 +53,7 @@ export const USUAL_CONVERSATION_MESSAGES = 25;
 export const JUDGED_MAX_CONVERSATION_MESSAGES = 40;
 export const JUDGED_MAX_CONVERSATION_DURATION = 30 * 60_000;
 
-// The interest town (deviation D8, the lab's 003-IP), under TOWN_CAST=interests:
+// The interest town (deviation D8), under TOWN_CAST=interests:
 // the leave question names a norm of 20 messages in the neutral wording, without
 // the clause on interesting talk, and the cap rises to 100 messages so that a
 // difference in how long two people want to talk is not cut off at 40. The 30

@@ -62,8 +62,8 @@ export async function startConversationMessage(
 }
 
 // The three prompts, apart from where they are sent, so the lab's
-// probe:showQuestions prints the very messages the chat model reads (003-IP,
-// IT-H). The text is upstream's (with D7's line), unchanged by the move.
+// probe:showQuestions prints the very messages the chat model reads. The text is
+// upstream's (with D7's line), unchanged by the move.
 
 function turnPrompt(player: { name: string }, otherPlayer: { name: string }) {
   return `${player.name} to ${otherPlayer.name}:`;

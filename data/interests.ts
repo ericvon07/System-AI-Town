@@ -1,13 +1,13 @@
-// The interest town (deviation D8, the lab's 003-IP), under TOWN_CAST=interests:
+// The interest town (deviation D8), under TOWN_CAST=interests:
 // six people who are the same text but for their names and six pastimes.
 // Unset, the town is the five of data/characters.ts, as published.
 //
 // Every pastime belongs to exactly two people, so nothing one pair shares
 // reaches a third. The pairs that share 3, 2 and 1 pastimes are three disjoint
 // matchings of the six, so everyone has one partner at each of 3, 2 and 1 and
-// two at 0: each person is their own control (IT-A).
+// two at 0: each person is their own control.
 //
-// Nothing says who shares what (IT-B). The text is Sam's base of
+// Nothing says who shares what. The text is Sam's base of
 // data/variants.ts without the bakery (six coworkers would share a workplace
 // across every pair), with the middle step of sociability, the neutral goal,
 // and no pronoun. No text here contains interest, interested, interesting,
@@ -16,7 +16,7 @@
 // either; they are dealt to the pairs by a fixed seed, and each list is put in
 // its own shuffled order, so the shared ones are not always first.
 //
-// Two dealings (003-IP, IT-I), picked by INTEREST_DEALING (1, the default, or
+// Two dealings, picked by INTEREST_DEALING (1, the default, or
 // 2): the same six names, texts and eighteen pastimes, but in the second every
 // name takes another row of the first's table -- one of the 24 permutations
 // under which no pair keeps its level -- and the pastimes are dealt again by

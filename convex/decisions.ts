@@ -96,7 +96,7 @@ export function conversationCap(cast: TownCast = townCast()): number {
 }
 
 // The town an arm runs in, which run-arm.sh writes into run.json: the cast,
-// its dealing in the interest town (INTEREST_DEALING, 003-IP's IT-I; null
+// its dealing in the interest town (INTEREST_DEALING; null
 // outside it), and the norm and the cap the judged backends use (a dice arm
 // leaves by upstream's rule whatever they say).
 export const town = internalQuery({

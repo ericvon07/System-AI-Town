@@ -304,7 +304,7 @@ function peopleOf(cast: TownCast, dealing: Dealing = interestDealing()): Me[] {
   }));
 }
 
-// The interest town's talks about a pastime (003-IP, IT-J): `other` speaks of
+// The interest town's talks about a pastime: `other` speaks of
 // one of their pastimes and `me` answers with the same neutral lines, four
 // lines repeating as the small talk does. The two talks of a pair differ in the
 // pastime's name alone: one both list ('both'), or one only `other` lists
@@ -470,19 +470,19 @@ export const probeLeave = internalAction({
 // What each judge is handed for one persona, side by side, with no call made:
 // for every decision, the question Jev receives (state, instructions and the
 // options with their descriptions) and the prompt Gemma reads, built from that
-// same object (choicePrompt; for importance, upstream's prompt, FT-E). The
+// same object (choicePrompt; for importance, upstream's prompt). The
 // states are the probes' — everyone a stranger at `distance` tiles, the leave
 // question on eight messages of small talk — and `other` is the inviter and
 // the partner in the leave question. `conversation` is the three prompts of a
 // conversation between the two as the chat model receives them.
 //
 // The town is the deployment's (TOWN_CAST) unless `cast` names one. In the
-// interest town (003-IP) the dealing is the deployment's (INTEREST_DEALING)
+// interest town the dealing is the deployment's (INTEREST_DEALING)
 // unless `dealing` names one, and the default pair is Avery and their partner
 // at level 3; `town` adds the six, the pastimes dealt and how many each pair
 // shares; the leave question comes in both wordings, the town's neutral one
 // and, for the probe only, the one with the five-person town's clause; and,
-// for the probe only, over the two talks about a pastime (IT-J) -- one both
+// for the probe only, over the two talks about a pastime -- one both
 // list (when the pair has one) and one only `other` lists.
 //
 //   npx convex run probe:showQuestions '{"name": "Bob"}'
@@ -585,7 +585,7 @@ export const showQuestions = internalQuery({
               ),
               pair: { me: me.name, other: other.name, level: level(me.name, other.name, dealing) },
               talks,
-              // The pastime each talk of IT-J is about, for every ordered pair: what
+              // The pastime each talk about a pastime is about, for every ordered pair: what
               // probeInterests asks, so the page shows it rather than rebuilding it.
               talkPastimes: Object.fromEntries(
                 people.map((a) => [
@@ -810,8 +810,8 @@ function judgeOf(backend: 'jev' | 'gemma', samples: number) {
   return { ask, tally };
 }
 
-// The interest town's paired probe (003-IP, IT-D and IT-J), on the six of
-// data/interests.ts in `dealing` (1 or 2, IT-I), everyone a stranger. The
+// The interest town's paired probe, on the six of
+// data/interests.ts in `dealing` (1 or 2), everyone a stranger. The
 // grid: for each person, the accept question from each of the five others;
 // the invite question over the five at `distance` tiles and no one, asked
 // with the five in the town's order and reversed, so that no level is always
