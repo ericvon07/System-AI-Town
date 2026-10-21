@@ -41,7 +41,8 @@ Further settings, all unset by default:
 `convex/probe.ts` asks the same questions over constructed states, outside a running town
 (`npx convex run probe:showQuestions` prints them). `data/variants.ts` holds characters that
 differ in one sentence. `results/` holds the traces and readouts of the first runs, on
-October 3 and 4, 2026.
+October 3 and 4, 2026. `runs/` holds the runs behind the results in the System One essay, and
+`scripts/readout.py` reads them: see [runs/README.md](runs/README.md).
 
 ## Running it
 

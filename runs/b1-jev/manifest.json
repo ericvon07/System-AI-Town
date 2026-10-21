@@ -1,0 +1,95 @@
+{
+  "name": "b1-jev",
+  "status": "citable",
+  "kind": "arm",
+  "condition": {
+    "backend": "jev",
+    "chat": "openrouter",
+    "policy": [
+      "sample"
+    ],
+    "models": [
+      "jev-1.13.0"
+    ],
+    "chat_model": "google/gemma-4-31b-it",
+    "message_length": "capped"
+  },
+  "code": {
+    "sha": "521ef5b",
+    "dirty": false,
+    "public_sha": "8ef57b1a77b8eb054ea8c76d5e0a64846be046ce"
+  },
+  "world": "m17cmn20cvnank2ss755t14w5x8fyydk",
+  "window": {
+    "start": "2026-10-08 21:35:10",
+    "end": "2026-10-08 22:35:29",
+    "minutes": 60
+  },
+  "counts": {
+    "decisions": 1191,
+    "fallbacks": 0,
+    "off_list": 0,
+    "by_decision": {
+      "leave_conversation": {
+        "n": 767,
+        "fallbacks": 0
+      },
+      "activity": {
+        "n": 82,
+        "fallbacks": 0
+      },
+      "accept_invite": {
+        "n": 88,
+        "fallbacks": 0
+      },
+      "invite_target": {
+        "n": 202,
+        "fallbacks": 0
+      },
+      "importance": {
+        "n": 52,
+        "fallbacks": 0
+      }
+    },
+    "conversations": 27,
+    "messages": 804,
+    "memories": 52
+  },
+  "spend": {
+    "openrouter_usd": 0.227778
+  },
+  "outputs": [
+    {
+      "file": "decisions.jsonl.gz",
+      "sha1": "434034f6441d86a59460e4b8f70eab1b8987586b",
+      "records": 1191
+    },
+    {
+      "file": "messages.jsonl.gz",
+      "sha1": "9ba36ad07157cbd06bc25488a385e217fa2f3849",
+      "records": 804
+    },
+    {
+      "file": "memories.jsonl.gz",
+      "sha1": "caa98fd374290315bb6268e21c3aeaae58f80d9d",
+      "records": 52
+    },
+    {
+      "file": "archivedConversations.jsonl.gz",
+      "sha1": "c460340d81725167683c3373c1c6bf988ef27815",
+      "records": 86
+    },
+    {
+      "file": "participatedTogether.jsonl.gz",
+      "sha1": "dd6c1ef67f28fbb0bbf62c32fe95355ae6d60107",
+      "records": 172
+    },
+    {
+      "file": "playerDescriptions.jsonl.gz",
+      "sha1": "17405edfe23a492cf417f9862ab5f2a379d11b81",
+      "records": 5
+    }
+  ],
+  "registered": "2026-10-08",
+  "notes": "Hour-long run 1 of 3: Jev on all five decisions, 60 minutes, conversations on Gemma, MESSAGE_LENGTH=capped, the leave norm of 25 and the cap of 40."
+}

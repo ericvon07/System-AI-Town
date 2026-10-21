@@ -1,0 +1,25 @@
+{
+  "name": "pv1-jev",
+  "status": "citable",
+  "kind": "probe",
+  "condition": {
+    "backend": "jev",
+    "probe": "probeVariants",
+    "models": "jev-1.13.0",
+    "args": {}
+  },
+  "code": {
+    "sha": "43d9806",
+    "dirty": false,
+    "public_sha": "a5be0d916aa5adf337d0cf80568ec31296e6e987"
+  },
+  "counts": {},
+  "outputs": [
+    {
+      "file": "probe.json.gz",
+      "sha1": "7818e9327ae22eee8aca77f6750750e1c12e95fe"
+    }
+  ],
+  "registered": "2026-10-07",
+  "notes": "The designed characters of data/variants.ts (the sociability and stamina ladders, written as Sam and called Lorenzo in the essay; Bob's ablation two by two; Bob's text under five names) asked accept, invite and leave against Lucky, Stella, Alice and Pete by Jev; four calls, one per family, on the same code; the pair of pv2-gemma."
+}

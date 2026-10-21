@@ -1,0 +1,37 @@
+{
+  "name": "pl3-jev",
+  "status": "citable",
+  "kind": "probe",
+  "condition": {
+    "backend": "jev",
+    "probe": "probeLeave",
+    "models": "jev-1.13.0",
+    "args": {
+      "lengths": [
+        2,
+        8,
+        20,
+        25,
+        30,
+        38
+      ]
+    }
+  },
+  "code": {
+    "sha": "f66fdca",
+    "dirty": false,
+    "public_sha": "2fe6365610c8616acb228f5d1da99a4154591a75"
+  },
+  "counts": {
+    "lengths": 6,
+    "rows": 120
+  },
+  "outputs": [
+    {
+      "file": "probe.json.gz",
+      "sha1": "5b928da3cfb8fc1a92ecc2c38e3b836b0c18bdea"
+    }
+  ],
+  "registered": "2026-10-07",
+  "notes": "leave_conversation on small talk going in circles, every ordered pair, lengths 2-38, the norm of 25 in the question, on committed code; the pair of pl4-gemma."
+}

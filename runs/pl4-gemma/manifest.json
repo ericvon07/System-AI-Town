@@ -1,0 +1,40 @@
+{
+  "name": "pl4-gemma",
+  "status": "citable",
+  "kind": "probe",
+  "condition": {
+    "backend": "gemma",
+    "probe": "probeLeave",
+    "models": "google/gemma-4-31b-it",
+    "args": {
+      "samples": 10,
+      "lengths": [
+        2,
+        8,
+        20,
+        25,
+        30,
+        38
+      ]
+    }
+  },
+  "code": {
+    "sha": "f66fdca",
+    "dirty": false,
+    "public_sha": "2fe6365610c8616acb228f5d1da99a4154591a75"
+  },
+  "counts": {
+    "lengths": 6,
+    "offList": 0,
+    "providers": 1,
+    "rows": 120
+  },
+  "outputs": [
+    {
+      "file": "probe.json.gz",
+      "sha1": "08a8072cce151c7662cb9050bc3eb363db5483a1"
+    }
+  ],
+  "registered": "2026-10-07",
+  "notes": "leave_conversation on small talk going in circles, every ordered pair at lengths 2-38, the norm of 25 in the question, 10 samples per state at temperature 1, through Friendli, on committed code; the pair of pl3-jev. 1,200 calls, none off the list, billed $0.1715."
+}

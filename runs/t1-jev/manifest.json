@@ -1,0 +1,100 @@
+{
+  "name": "t1-jev",
+  "status": "citable",
+  "kind": "arm",
+  "condition": {
+    "backend": "jev",
+    "chat": "openrouter",
+    "policy": [
+      "sample"
+    ],
+    "models": [
+      "jev-1.13.0"
+    ],
+    "chat_model": "google/gemma-4-31b-it",
+    "message_length": "capped",
+    "cast": "interests",
+    "dealing": 1,
+    "norm": 20,
+    "cap": 100
+  },
+  "code": {
+    "sha": "481965b",
+    "dirty": false,
+    "public_sha": "eeabff7c68e831251711190491a12cd0a046371b"
+  },
+  "world": "m177bqj7j3hykv2p4v941cpw6x8fywkk",
+  "window": {
+    "start": "2026-10-09 09:33:31",
+    "end": "2026-10-09 10:33:52",
+    "minutes": 60
+  },
+  "counts": {
+    "decisions": 1427,
+    "fallbacks": 0,
+    "off_list": 0,
+    "by_decision": {
+      "leave_conversation": {
+        "n": 885,
+        "fallbacks": 0
+      },
+      "accept_invite": {
+        "n": 108,
+        "fallbacks": 0
+      },
+      "invite_target": {
+        "n": 217,
+        "fallbacks": 0
+      },
+      "importance": {
+        "n": 166,
+        "fallbacks": 0
+      },
+      "activity": {
+        "n": 51,
+        "fallbacks": 0
+      }
+    },
+    "conversations": 86,
+    "messages": 971,
+    "memories": 166
+  },
+  "spend": {
+    "openrouter_usd": 0.177476,
+    "cap_usd": 1.5
+  },
+  "outputs": [
+    {
+      "file": "decisions.jsonl.gz",
+      "sha1": "e36d3de1153fc5cfc810ef87b17d66c0a7d9a0fc",
+      "records": 1427
+    },
+    {
+      "file": "messages.jsonl.gz",
+      "sha1": "0ee945e5708b59f94c4d83713a4ad0a91ac0ebaa",
+      "records": 971
+    },
+    {
+      "file": "memories.jsonl.gz",
+      "sha1": "e8287141fb2e21e192b086d525f10b2fe839c0d5",
+      "records": 166
+    },
+    {
+      "file": "archivedConversations.jsonl.gz",
+      "sha1": "608c3ab3c09318fa5d960bb08c7b978034fb744c",
+      "records": 107
+    },
+    {
+      "file": "participatedTogether.jsonl.gz",
+      "sha1": "f0d908f8dd2943533806c02993bc708bf87ada78",
+      "records": 214
+    },
+    {
+      "file": "playerDescriptions.jsonl.gz",
+      "sha1": "bd16c4e451ad1027bc96239503018966e8da31fe",
+      "records": 6
+    }
+  ],
+  "registered": "2026-10-09",
+  "notes": "Interest town, world 1 of 2: the first dealing of the pastimes, Jev on the five decisions, chat on Gemma."
+}

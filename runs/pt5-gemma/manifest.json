@@ -1,0 +1,57 @@
+{
+  "name": "pt5-gemma",
+  "status": "citable",
+  "kind": "probe",
+  "condition": {
+    "backend": "gemma",
+    "probe": "probeInterests",
+    "models": "google/gemma-4-31b-it",
+    "args": {
+      "distance": 5,
+      "samples": 10,
+      "lengths": [
+        2,
+        10,
+        20,
+        30,
+        45,
+        60,
+        80
+      ],
+      "talkLengths": [
+        10,
+        20,
+        30
+      ],
+      "part": "all",
+      "norm": 20,
+      "wordings": [
+        "neutral",
+        "clause"
+      ],
+      "only": null,
+      "dealing": 2
+    }
+  },
+  "code": {
+    "sha": "481965b",
+    "dirty": false,
+    "public_sha": "eeabff7c68e831251711190491a12cd0a046371b"
+  },
+  "counts": {
+    "providers": 1,
+    "offList": 0,
+    "wordings": 2,
+    "lengths": 7,
+    "talkLengths": 3,
+    "rows": 750
+  },
+  "outputs": [
+    {
+      "file": "probe.json.gz",
+      "sha1": "b06ee6e99d31662b915efe7b8ee34d02af14f185"
+    }
+  ],
+  "registered": "2026-10-09",
+  "notes": "The interest town's probe, Gemma at 10 samples, second dealing, on the deployment: twelve calls (one person and one part each) joined into this file; pairs with pt3-jev."
+}

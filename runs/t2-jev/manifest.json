@@ -1,0 +1,100 @@
+{
+  "name": "t2-jev",
+  "status": "citable",
+  "kind": "arm",
+  "condition": {
+    "backend": "jev",
+    "chat": "openrouter",
+    "policy": [
+      "sample"
+    ],
+    "models": [
+      "jev-1.13.0"
+    ],
+    "chat_model": "google/gemma-4-31b-it",
+    "message_length": "capped",
+    "cast": "interests",
+    "dealing": 2,
+    "norm": 20,
+    "cap": 100
+  },
+  "code": {
+    "sha": "481965b",
+    "dirty": false,
+    "public_sha": "eeabff7c68e831251711190491a12cd0a046371b"
+  },
+  "world": "m1714ypxqfdrjny3nk7nfaekyn8fy8pv",
+  "window": {
+    "start": "2026-10-09 10:33:58",
+    "end": "2026-10-09 11:34:27",
+    "minutes": 60
+  },
+  "counts": {
+    "decisions": 1131,
+    "fallbacks": 20,
+    "off_list": 0,
+    "by_decision": {
+      "leave_conversation": {
+        "n": 688,
+        "fallbacks": 7
+      },
+      "importance": {
+        "n": 112,
+        "fallbacks": 0
+      },
+      "accept_invite": {
+        "n": 86,
+        "fallbacks": 0
+      },
+      "invite_target": {
+        "n": 178,
+        "fallbacks": 4
+      },
+      "activity": {
+        "n": 67,
+        "fallbacks": 9
+      }
+    },
+    "conversations": 58,
+    "messages": 739,
+    "memories": 112
+  },
+  "spend": {
+    "openrouter_usd": 0.142673,
+    "cap_usd": 1.5
+  },
+  "outputs": [
+    {
+      "file": "decisions.jsonl.gz",
+      "sha1": "6758b9dabfac220cafaf7ab593abc6e409218f1b",
+      "records": 1131
+    },
+    {
+      "file": "messages.jsonl.gz",
+      "sha1": "57db156b74c5e0b0adc2512fc644130b8309024d",
+      "records": 739
+    },
+    {
+      "file": "memories.jsonl.gz",
+      "sha1": "ac6385a6175c4ab8ae13c68bf4ac88d7e462392e",
+      "records": 112
+    },
+    {
+      "file": "archivedConversations.jsonl.gz",
+      "sha1": "d912a1764a2384c685cd76ad3196ef7a7ec1da6a",
+      "records": 84
+    },
+    {
+      "file": "participatedTogether.jsonl.gz",
+      "sha1": "e2acc59cf139cc2b29f9e65049cf3b0639a3ed2a",
+      "records": 168
+    },
+    {
+      "file": "playerDescriptions.jsonl.gz",
+      "sha1": "8e252be64d0f615d88413b5bb25aedfd50f1a44d",
+      "records": 6
+    }
+  ],
+  "registered": "2026-10-09",
+  "notes": "Interest town, world 2 of 2: the second dealing of the pastimes, Jev on the five decisions, chat on Gemma; 20 fallbacks (1.8%) all between minutes 38 and 45, when api.typesafe.ai could not be reached (DNS errors, aborted calls): the die decided 4 invites, 7 leaves and 9 activities in that window, which the readout leaves out but the trajectory carries."
+}

@@ -1,0 +1,98 @@
+{
+  "name": "b3-gemma",
+  "status": "citable",
+  "kind": "arm",
+  "condition": {
+    "backend": "gemma",
+    "chat": "openrouter",
+    "policy": [
+      "sample"
+    ],
+    "models": [
+      "google/gemma-4-31b-it"
+    ],
+    "chat_model": "google/gemma-4-31b-it",
+    "message_length": "capped",
+    "cast": "upstream",
+    "norm": 25,
+    "cap": 40
+  },
+  "code": {
+    "sha": "521ef5b",
+    "dirty": false,
+    "public_sha": "8ef57b1a77b8eb054ea8c76d5e0a64846be046ce"
+  },
+  "world": "m17a57zs81s9j4vvqjh77xww758fzva6",
+  "window": {
+    "start": "2026-10-08 23:36:37",
+    "end": "2026-10-09 00:37:00",
+    "minutes": 60
+  },
+  "counts": {
+    "decisions": 1161,
+    "fallbacks": 0,
+    "off_list": 0,
+    "by_decision": {
+      "leave_conversation": {
+        "n": 860,
+        "fallbacks": 0
+      },
+      "accept_invite": {
+        "n": 65,
+        "fallbacks": 0
+      },
+      "invite_target": {
+        "n": 137,
+        "fallbacks": 0
+      },
+      "activity": {
+        "n": 57,
+        "fallbacks": 0
+      },
+      "importance": {
+        "n": 42,
+        "fallbacks": 0
+      }
+    },
+    "conversations": 22,
+    "messages": 901,
+    "memories": 42
+  },
+  "spend": {
+    "openrouter_usd": 0.500725
+  },
+  "outputs": [
+    {
+      "file": "decisions.jsonl.gz",
+      "sha1": "e4d5d9a2644430c8336eb844b3b0118e1ef5da7d",
+      "records": 1161
+    },
+    {
+      "file": "messages.jsonl.gz",
+      "sha1": "097fb287bd1636976c8f8b7aea7738564a97d7f7",
+      "records": 901
+    },
+    {
+      "file": "memories.jsonl.gz",
+      "sha1": "4bc697b3d6f7636e5f4fa7fd74a7c73ef5ec4f78",
+      "records": 42
+    },
+    {
+      "file": "archivedConversations.jsonl.gz",
+      "sha1": "e8feb223ee25e115c615166103f9a87972d3cb68",
+      "records": 63
+    },
+    {
+      "file": "participatedTogether.jsonl.gz",
+      "sha1": "a2d774cccfe86d849d1a7fd6b0f9366a4e3130e5",
+      "records": 126
+    },
+    {
+      "file": "playerDescriptions.jsonl.gz",
+      "sha1": "34f3c1e510a0ac58e0a408612cd729165bc177cf",
+      "records": 5
+    }
+  ],
+  "registered": "2026-10-09",
+  "notes": "Hour-long run 3 of 3: Gemma on all five decisions, 60 minutes, conversations on Gemma, MESSAGE_LENGTH=capped, the leave norm of 25 and the cap of 40; decision latency at night far below the afternoon's s2-gemma."
+}

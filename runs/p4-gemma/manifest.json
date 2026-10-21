@@ -1,0 +1,34 @@
+{
+  "name": "p4-gemma",
+  "status": "citable",
+  "kind": "probe",
+  "condition": {
+    "backend": "gemma",
+    "probe": "probeGemma",
+    "models": "google/gemma-4-31b-it",
+    "args": {
+      "distance": 5,
+      "samples": 10
+    }
+  },
+  "code": {
+    "sha": "f66fdca",
+    "dirty": false,
+    "public_sha": "2fe6365610c8616acb228f5d1da99a4154591a75"
+  },
+  "counts": {
+    "accept": 20,
+    "activity": 5,
+    "invite": 5,
+    "offList": 0,
+    "providers": 1
+  },
+  "outputs": [
+    {
+      "file": "probe.json.gz",
+      "sha1": "c800e1e555415f4732ca30dda5787df716c4c58c"
+    }
+  ],
+  "registered": "2026-10-07",
+  "notes": "Gemma's grid at 5 tiles, everyone a stranger, 10 samples per question at temperature 1, through Friendli, on committed code; the pair of p3-jev. 300 calls, none off the list, billed $0.0158."
+}

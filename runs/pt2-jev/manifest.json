@@ -1,0 +1,54 @@
+{
+  "name": "pt2-jev",
+  "status": "citable",
+  "kind": "probe",
+  "condition": {
+    "backend": "jev",
+    "probe": "probeInterests",
+    "models": "jev-1.13.0",
+    "args": {
+      "distance": 5,
+      "lengths": [
+        2,
+        10,
+        20,
+        30,
+        45,
+        60,
+        80
+      ],
+      "talkLengths": [
+        10,
+        20,
+        30
+      ],
+      "part": "all",
+      "norm": 20,
+      "wordings": [
+        "neutral",
+        "clause"
+      ],
+      "only": null,
+      "dealing": 1
+    }
+  },
+  "code": {
+    "sha": "481965b",
+    "dirty": false,
+    "public_sha": "eeabff7c68e831251711190491a12cd0a046371b"
+  },
+  "counts": {
+    "lengths": 7,
+    "rows": 750,
+    "talkLengths": 3,
+    "wordings": 2
+  },
+  "outputs": [
+    {
+      "file": "probe.json.gz",
+      "sha1": "5d58fc6ec5d9d8b6a4d48459424998f2e147446b"
+    }
+  ],
+  "registered": "2026-10-09",
+  "notes": "The interest town's probe, Jev, first dealing of the pastimes, on the deployment: whom to invite by level, and the leave question over talks about a pastime; pairs with pt4-gemma."
+}

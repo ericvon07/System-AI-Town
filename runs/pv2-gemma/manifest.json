@@ -1,0 +1,25 @@
+{
+  "name": "pv2-gemma",
+  "status": "citable",
+  "kind": "probe",
+  "condition": {
+    "backend": "gemma",
+    "probe": "probeVariants",
+    "models": "google/gemma-4-31b-it",
+    "args": {}
+  },
+  "code": {
+    "sha": "521ef5b",
+    "dirty": false,
+    "public_sha": "8ef57b1a77b8eb054ea8c76d5e0a64846be046ce"
+  },
+  "counts": {},
+  "outputs": [
+    {
+      "file": "probe.json.gz",
+      "sha1": "d7e765284a2f2f7f824050f8a7997647dc7e7694"
+    }
+  ],
+  "registered": "2026-10-07",
+  "notes": "The designed characters of pv1-jev asked of Gemma, 10 samples per question at temperature 1, through Friendli; the pair of pv1-jev. Sociability in two calls (a call's limit is five minutes) on 8ef57b1; stamina, ablation and names on a5be0d9, whose questions are the same (commits of this repository)."
+}

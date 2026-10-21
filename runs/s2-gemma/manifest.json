@@ -1,0 +1,86 @@
+{
+  "name": "s2-gemma",
+  "status": "citable",
+  "kind": "arm",
+  "condition": {
+    "backend": "gemma",
+    "chat": "openrouter",
+    "policy": [
+      "sample"
+    ],
+    "models": [
+      "google/gemma-4-31b-it"
+    ],
+    "chat_model": "google/gemma-4-31b-it",
+    "message_length": "capped"
+  },
+  "code": {
+    "sha": "6511f4c",
+    "dirty": false,
+    "public_sha": "232827e463a20f7be241d14be3ded284169c1762"
+  },
+  "world": "m172tdydnpwc4vt2w33efrm61d8fth18",
+  "window": {
+    "start": "2026-10-07 09:44:19",
+    "end": "2026-10-07 09:54:39",
+    "minutes": 10
+  },
+  "counts": {
+    "decisions": 77,
+    "fallbacks": 0,
+    "off_list": 0,
+    "by_decision": {
+      "leave_conversation": {
+        "n": 50,
+        "fallbacks": 0
+      },
+      "activity": {
+        "n": 12,
+        "fallbacks": 0
+      },
+      "accept_invite": {
+        "n": 4,
+        "fallbacks": 0
+      },
+      "invite_target": {
+        "n": 11,
+        "fallbacks": 0
+      }
+    },
+    "conversations": 2,
+    "messages": 50,
+    "memories": 0
+  },
+  "spend": {
+    "openrouter_usd": 0.012504
+  },
+  "outputs": [
+    {
+      "file": "decisions.jsonl.gz",
+      "sha1": "966ff2c141e8978f7261de02254f9a14782119a0",
+      "records": 77
+    },
+    {
+      "file": "messages.jsonl.gz",
+      "sha1": "cc69bf2b6d8db848799d8b70ef12c23eda12fa3f",
+      "records": 50
+    },
+    {
+      "file": "archivedConversations.jsonl.gz",
+      "sha1": "fea8b24c122283fd3815ad789efc37fad7d58c65",
+      "records": 2
+    },
+    {
+      "file": "participatedTogether.jsonl.gz",
+      "sha1": "bc79dcc22786268dff19f924d0e412398577031f",
+      "records": 4
+    },
+    {
+      "file": "playerDescriptions.jsonl.gz",
+      "sha1": "2f580b534cfc4e29c37a5b654273acc545017d9b",
+      "records": 5
+    }
+  ],
+  "registered": "2026-10-07",
+  "notes": "A 10-minute run with Gemma deciding, conversations on Gemma, MESSAGE_LENGTH=capped. Gemma never chose leave (50 decisions), so no conversation ended and no memory was written; decision latency median 7.6 s."
+}

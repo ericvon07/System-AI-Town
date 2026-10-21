@@ -1,0 +1,31 @@
+{
+  "name": "p3-jev",
+  "status": "citable",
+  "kind": "probe",
+  "condition": {
+    "backend": "jev",
+    "probe": "probeJev",
+    "models": "jev-1.13.0",
+    "args": {
+      "distance": 5
+    }
+  },
+  "code": {
+    "sha": "f66fdca",
+    "dirty": false,
+    "public_sha": "2fe6365610c8616acb228f5d1da99a4154591a75"
+  },
+  "counts": {
+    "accept": 20,
+    "activity": 5,
+    "invite": 5
+  },
+  "outputs": [
+    {
+      "file": "probe.json.gz",
+      "sha1": "0619862cf9734bca08aeb3147599fdcac90edc11"
+    }
+  ],
+  "registered": "2026-10-07",
+  "notes": "Jev's grid at 5 tiles, everyone a stranger, on committed code; the pair of p4-gemma (same states, same questions)."
+}

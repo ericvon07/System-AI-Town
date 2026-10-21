@@ -1,0 +1,92 @@
+{
+  "name": "b2-dice",
+  "status": "citable",
+  "kind": "arm",
+  "condition": {
+    "backend": "dice",
+    "chat": "openrouter",
+    "policy": null,
+    "models": [
+      "google/gemma-4-31b-it"
+    ],
+    "chat_model": "google/gemma-4-31b-it",
+    "message_length": "capped",
+    "cast": "upstream",
+    "norm": null,
+    "cap": null
+  },
+  "code": {
+    "sha": "521ef5b",
+    "dirty": false,
+    "public_sha": "8ef57b1a77b8eb054ea8c76d5e0a64846be046ce"
+  },
+  "world": "m17cejxn5z9b6sj9eynv8yvmb18fz10x",
+  "window": {
+    "start": "2026-10-08 22:36:03",
+    "end": "2026-10-08 23:36:27",
+    "minutes": 60
+  },
+  "counts": {
+    "decisions": 396,
+    "fallbacks": 0,
+    "off_list": 0,
+    "by_decision": {
+      "importance": {
+        "n": 109,
+        "fallbacks": 0
+      },
+      "accept_invite": {
+        "n": 94,
+        "fallbacks": 0
+      },
+      "invite_target": {
+        "n": 149,
+        "fallbacks": 0
+      },
+      "activity": {
+        "n": 44,
+        "fallbacks": 0
+      }
+    },
+    "conversations": 56,
+    "messages": 560,
+    "memories": 109
+  },
+  "spend": {
+    "openrouter_usd": 0.107403
+  },
+  "outputs": [
+    {
+      "file": "decisions.jsonl.gz",
+      "sha1": "6a4e3df85a4d66c0d19669847de2dd25a46c301a",
+      "records": 396
+    },
+    {
+      "file": "messages.jsonl.gz",
+      "sha1": "f1f21721d2044ea32d5ab80dd301476e710c7392",
+      "records": 560
+    },
+    {
+      "file": "memories.jsonl.gz",
+      "sha1": "d6908462dddc1deba79d40934f9266db980253a0",
+      "records": 109
+    },
+    {
+      "file": "archivedConversations.jsonl.gz",
+      "sha1": "23f00d883eac56e8c194c4804c96da0ba3363a40",
+      "records": 97
+    },
+    {
+      "file": "participatedTogether.jsonl.gz",
+      "sha1": "87e6f11d4e382c5b840f465a5bec07efa6d04d66",
+      "records": 194
+    },
+    {
+      "file": "playerDescriptions.jsonl.gz",
+      "sha1": "3db7fd6dcb278a46b6b90f0f8fcd09280d706cc3",
+      "records": 5
+    }
+  ],
+  "registered": "2026-10-08",
+  "notes": "Hour-long run 2 of 3: upstream's dice and rules on all five decisions, 60 minutes, conversations on Gemma, MESSAGE_LENGTH=capped, upstream's leave rule (more than 8 messages or 10 minutes)."
+}
